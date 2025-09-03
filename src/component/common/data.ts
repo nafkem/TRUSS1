@@ -7,6 +7,9 @@ export const headerNav = [
     title: "My order",
     link: "/order",
   },
+  {title:"Sell Product",
+    link:"/add-listing"
+  }
 ];
 
 export const footerLinks = [

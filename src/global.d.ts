@@ -1,7 +1,17 @@
-export {};
+// src/types/global.d.ts
+import { BrowserProvider } from 'ethers';
 
 declare global {
   interface Window {
-    ethereum?: any; // You can replace 'any' with MetaMask's type if you want strict typing
+    ethereum?: {
+      request: (args: { method: string; params?: any[] }) => Promise<any>;
+      on: (event: string, callback: (...args: any[]) => void) => void;
+      removeListener: (event: string, callback: (...args: any[]) => void) => void;
+      selectedAddress?: string;
+      chainId?: string;
+    };
   }
 }
+
+// This ensures this file is treated as a module
+export {};
