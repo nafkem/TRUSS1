@@ -6,6 +6,8 @@ import Listing from "./page/listing";
 import AddProduct from "./page/listing/new";
 import Order from "./page/order";
 import Cart from "./page/cart";
+import { TestPage } from './TestPage';
+
 import SellProductPage from "./page/product/SellProductPage"; // Correct import path
 
 const routes = createBrowserRouter([
@@ -20,6 +22,7 @@ const routes = createBrowserRouter([
       { path: "/sell", element: <SellProductPage /> }, // This should work now
       { path: "/order", element: <Order /> },
       { path: "/cart", element: <Cart /> },
+      {path: "/test", element: <TestPage />}, // New route for TestPage
     ],
   },
 ]);
