@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { getBrowserProvider } from '../shared/providers';
+
 import { getProductContract } from '../contracts/product/contract'; 
 import { ethers } from 'ethers';
 
@@ -17,10 +17,9 @@ export const useProductActions = () => {
     setError(null);
     try {
       console.log("1. Getting provider and signer...");
-      const provider = getBrowserProvider();
       
       console.log("2. Getting PRODUCT contract instance...");
-      const productContract = await getProductContract(provider);
+      const productContract = await getProductContract();
 
       console.log("3. Converting price to wei...");
       const priceInWei = ethers.parseEther(productData.unitPrice.toString());

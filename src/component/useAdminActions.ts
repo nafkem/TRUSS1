@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { getBrowserProvider } from '../shared/providers';
+
 import { getUserContract } from '../contracts/user/contract'; 
 
 export const useAdminActions = () => {
@@ -11,10 +11,10 @@ export const useAdminActions = () => {
     setError(null);
     try {
       console.log("1. Getting provider and signer...");
-      const provider = getBrowserProvider();
+      //const provider = getBrowserProvider();
       
       console.log("2. Getting USER contract instance...");
-      const userContract = await getUserContract(provider);
+      const userContract = await getUserContract();
 
       console.log("3. Verifying seller:", sellerAddress);
       const transaction = await userContract.verifySeller(sellerAddress);

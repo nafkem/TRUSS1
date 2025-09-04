@@ -1,6 +1,8 @@
 // src/hook/useUserActions.ts
 import { useState } from 'react';
-import { getBrowserProvider } from '../shared/providers';
+
+import { getCurrentAddress } from '../shared/providers';
+
 import { getUserContract } from '../contracts/user/contract'; 
 
 export const useUserActions = () => {
@@ -13,10 +15,9 @@ export const useUserActions = () => {
     setError(null);
     try {
       console.log("1. Getting provider and signer...");
-      const provider = getBrowserProvider();
       
       console.log("2. Getting USER contract instance...");
-      const userContract = await getUserContract(provider);
+      const userContract = await getUserContract();
 
       console.log("3. Calling register() with parameters...");
       const transaction = await userContract.register(
@@ -48,21 +49,18 @@ export const useUserActions = () => {
     setError(null);
     try {
       console.log("1. Getting provider and signer...");
-      const provider = getBrowserProvider();
       
       console.log("2. Getting USER contract instance...");
-      const userContract = await getUserContract(provider);
 
-      console.log("3. Getting user data...");
-      const signer = await provider.getSigner();
-      const userAddress = await signer.getAddress();
-      
+      console.log("2. Getting USER contract instance...");
+      const userContract = await getUserContract();
+      const userAddress = await getCurrentAddress();
+
       const data = await userContract.getUserData(userAddress);
-      
+
       console.log("✅ User data retrieved:", data);
       setUserData(data);
       return data;
-
     } catch (err: any) {
       console.error("❌ Failed to get user data:", err);
       const errorMsg = err.reason || err.message || "Failed to get user data";
