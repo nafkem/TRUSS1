@@ -1,15 +1,30 @@
-import { Contract } from "ethers";
-import ecomAbi from "./ecomAbi.json";
-import { ECOMMERCE_CONTRACT_ADDRESS } from "./constant";
-import { getBrowserProvider } from "../../shared/providers";
+// src/contracts/product/contract.ts
+import { Contract, BrowserProvider } from "ethers";
+import productAbi from "./ecomAbi.json";
+import { ECOMMERCE_CONTRACT_ADDRESS } from "./constant"; // Import from constant
 
 export async function getEcommerceContract(): Promise<Contract> {
-  const provider = getBrowserProvider();
+  if (!window.ethereum) throw new Error("No Ethereum provider found");
+  
+  const provider = new BrowserProvider(window.ethereum);
   const signer = await provider.getSigner();
-  return new Contract(ECOMMERCE_CONTRACT_ADDRESS, ecomAbi, signer);
+  return new Contract(ECOMMERCE_CONTRACT_ADDRESS, productAbi, signer);
 }
 
-export async function getEcommerceContractReadOnly(): Promise<Contract> {
-  const provider = getBrowserProvider();
-  return new Contract(ECOMMERCE_CONTRACT_ADDRESS, ecomAbi, provider);
+export function getEcommerceContractReadOnly(): Contract {
+  if (!window.ethereum) throw new Error("No Ethereum provider found");
+  
+  const provider = new BrowserProvider(window.ethereum);
+  return new Contract(ECOMMERCE_CONTRACT_ADDRESS, productAbi, provider);
 }
+
+export async function getCurrentAccountAddress(): Promise<string> {
+  if (!window.ethereum) throw new Error("No Ethereum provider found");
+  
+  const provider = new BrowserProvider(window.ethereum);
+  const signer = await provider.getSigner();
+  return await signer.getAddress();
+}
+
+// Export the contract address if needed elsewhere
+export { ECOMMERCE_CONTRACT_ADDRESS };

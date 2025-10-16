@@ -6,10 +6,10 @@ import ProductList from "./page/product/ProductList"; // ✅ all products
 import AddProduct from "./page/product/addProduct";
 import Order from "./page/order";
 import Cart from "./page/cart";
+import CheckoutPage from "./page/checkout";
 import Register from "./page/register/Register";
 import DebugViewProduct from "./page/product/DebugViewProduct";
 import VerifySeller from "./page/register/VerifySeller";
-//import Listing from "./page/listing";   // ✅ seller's product listing
 import { WalletProvider } from "./context/walletContext";
 
 const routes = createBrowserRouter([
@@ -23,6 +23,7 @@ const routes = createBrowserRouter([
       { path: "/product/:id", element: <Product /> },  // single product view
       { path: "/debug-view", element: <DebugViewProduct /> },
       { path: "/cart", element: <Cart /> },
+      {path: "/checkout", element: <CheckoutPage /> },
       { path: "/order", element: <Order /> },
 
       // ---------------- Seller Flow ----------------

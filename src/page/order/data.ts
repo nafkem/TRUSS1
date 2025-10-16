@@ -3,6 +3,19 @@ import Product2 from "../../assets/image/shop/shop2.jpeg";
 import Product4 from "../../assets/image/shop/shop4.jpeg";
 import Product5 from "../../assets/image/shop/shop5.jpeg";
 
+export const orderStatuses = {
+  pending: "Pending Payment",
+  paid: "Payment Received", 
+  shipped: "Shipped",
+  delivered: "Delivered",
+  cancelled: "Cancelled"
+};
+
+export const orderActions = {
+  seller: ["mark_shipped", "cancel_order"],
+  buyer: ["confirm_delivery", "request_refund"]
+};
+
 export const incomingData = [
   {
     id: "1",

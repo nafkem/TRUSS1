@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { ecommerceService } from "../../contracts/ecommerce/ecommerceService";
+import { useCart } from "../../context/CartContext";
 import { productService } from "../../contracts/product/productService";
 import { useWallet } from "../../context/walletContext";
 
@@ -22,13 +24,15 @@ type CombinedProduct = {
   createdAt?: string;
 };
 
-export default function ViewProduct() {
+export default function ViewProduct() { // ✅ Remove async from component
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { account } = useWallet();
+  const { addToCart } = useCart(); // ✅ Single declaration
   
   const [product, setProduct] = useState<CombinedProduct | null>(null);
   const [loading, setLoading] = useState(true);
+  const [addingToCart, setAddingToCart] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -47,39 +51,74 @@ export default function ViewProduct() {
       setLoading(true);
       console.log("🔍 Loading product with ID:", id);
 
-      // Get all data from both sources
-      const [backendResponse, blockchainProducts] = await Promise.all([
-        fetch('http://localhost:3001/api/products').then(res => res.ok ? res.json() : []),
-        productService.getAllProducts().catch(() => [])
+      // Get data from both sources with proper error handling
+      const [backendResponse, blockchainProducts] = await Promise.allSettled([
+        fetch('http://localhost:3001/api/products')
+          .then(res => {
+            if (!res.ok) {
+              throw new Error(`Backend error: ${res.status}`);
+            }
+            return res.json();
+          })
+          .catch(error => {
+            console.warn("⚠️ Backend unavailable:", error);
+            return [];
+          }),
+        productService.getAllProducts().catch(error => {
+          console.warn("⚠️ Blockchain unavailable:", error);
+          return [];
+        })
       ]);
 
-      console.log("📦 Backend products:", backendResponse.length);
-      console.log("🔗 Blockchain products:", blockchainProducts.length);
+      // Handle backend response
+      const backendProducts = backendResponse.status === 'fulfilled' 
+        ? backendResponse.value 
+        : [];
+      
+      // Handle blockchain response  
+      const blockchainProductsData = blockchainProducts.status === 'fulfilled'
+        ? blockchainProducts.value
+        : [];
+
+      console.log("📦 Backend products:", backendProducts?.length || 0);
+      console.log("🔗 Blockchain products:", blockchainProductsData.length);
 
       let foundProduct: CombinedProduct | null = null;
 
       // STRATEGY 1: Find by backend _id (this is what ProductList passes)
-      const backendProduct = backendResponse.find((p: any) => p._id === id);
+      const backendProduct = backendProducts?.find((p: any) => p._id === id);
       
       if (backendProduct) {
         console.log("✅ Found backend product:", backendProduct.title);
         
-        // Since titles don't match, we need a different approach
-        // Let's use the ONE product that actually matches
-        if (backendProduct.productId === "1921959445789603936") {
-          // This is the only product that exists in both systems
-          const blockchainProduct = blockchainProducts.find(bp => bp.productId === "1921959445789603936");
-          if (blockchainProduct) {
-            foundProduct = { ...blockchainProduct, ...backendProduct };
-            console.log("✅ Using the only matched product");
-          }
+        // Try to find matching blockchain product by title
+        const blockchainProduct = blockchainProductsData.find((bp: any) => 
+          bp.title?.toLowerCase().includes(backendProduct.title?.toLowerCase() || '') ||
+          backendProduct.title?.toLowerCase().includes(bp.title?.toLowerCase() || '')
+        );
+
+        if (blockchainProduct) {
+          foundProduct = { 
+            ...blockchainProduct, 
+            ...backendProduct,
+            // Ensure critical fields exist with proper defaults
+            productId: blockchainProduct.productId || backendProduct.productId || "0",
+            sellerId: blockchainProduct.sellerId || backendProduct.sellerId || "1",
+            title: backendProduct.title || blockchainProduct.title || "Unknown Product",
+            price: backendProduct.price || "0",
+            unitPrice: blockchainProduct.unitPrice || BigInt(0),
+            waranteeDuration: blockchainProduct.waranteeDuration || backendProduct.waranteeDuration || "0",
+            expectedDeliveryTime: blockchainProduct.expectedDeliveryTime?.toString() || backendProduct.expectedDeliveryTime?.toString() || "0",
+            whenToExpectDelivery: blockchainProduct.whenToExpectDelivery || BigInt(backendProduct.expectedDeliveryTime || 0)
+          };
+          console.log("✅ Found blockchain match by title");
         } else {
-          // For other products, create a combined product with backend data + dummy blockchain data
+          // Use backend data with placeholder blockchain fields
           foundProduct = {
-            productId: backendProduct.productId,
+            productId: backendProduct.productId || "0",
             sellerId: backendProduct.sellerId || "1",
-            title: backendProduct.title,
-            price: backendProduct.price,
+            title: backendProduct.title || "Unknown Product",
+            price: backendProduct.price || "0",
             unitPrice: BigInt(0),
             waranteeDuration: backendProduct.waranteeDuration || "0",
             expectedDeliveryTime: backendProduct.expectedDeliveryTime?.toString() || "0",
@@ -90,8 +129,27 @@ export default function ViewProduct() {
         }
       }
 
+      // STRATEGY 2: If not found in backend, try blockchain directly
+      if (!foundProduct && blockchainProductsData.length > 0) {
+        const blockchainProduct = blockchainProductsData.find((bp: any) => bp.productId === id);
+        if (blockchainProduct) {
+          foundProduct = {
+            ...blockchainProduct,
+            productId: blockchainProduct.productId || "0",
+            sellerId: blockchainProduct.sellerId || "1",
+            title: blockchainProduct.title || "Unknown Product",
+            price: blockchainProduct.unitPrice ? blockchainProduct.unitPrice.toString() : "0",
+            unitPrice: blockchainProduct.unitPrice || BigInt(0),
+            waranteeDuration: blockchainProduct.waranteeDuration || "0",
+            expectedDeliveryTime: blockchainProduct.expectedDeliveryTime?.toString() || "0",
+            whenToExpectDelivery: blockchainProduct.whenToExpectDelivery || BigInt(0)
+          };
+          console.log("✅ Found blockchain product directly");
+        }
+      }
+
       if (!foundProduct) {
-        throw new Error("Product not found in backend");
+        throw new Error("Product not found in any data source");
       }
 
       setProduct(foundProduct);
@@ -99,42 +157,114 @@ export default function ViewProduct() {
 
     } catch (err: any) {
       console.error("❌ Final error:", err);
-      toast.error("Product not found");
+      toast.error(err.message || "Product not found");
       navigate("/products");
     } finally {
       setLoading(false);
     }
   };
+const handleAddToCart = async () => {
+  if (!account) {
+    toast.error("⚠️ Please connect your wallet first");
+    return;
+  }
 
-  const handleAddToCart = async () => {
-    if (!account) {
-      toast.error("⚠️ Please connect your wallet first");
-      return;
+  if (!product) return;
+
+  try {
+    setAddingToCart(true);
+    
+    // Check if product has real blockchain data
+    const hasRealBlockchainData = product.unitPrice !== undefined && 
+                                 product.unitPrice > BigInt(0) && 
+                                 product.productId !== "0";
+
+    if (hasRealBlockchainData) {
+      toast.info("🛒 Adding to blockchain cart...");
+      const result = await ecommerceService.addProductToCart(product.productId, 1);
+      if (result && result.tx) {
+        toast.info("⏳ Waiting for transaction confirmation...");
+        await result.tx.wait();
+        toast.success("✅ Transaction confirmed!");
+      }
+    } else {
+      toast.info("🛒 Adding to local cart...");
     }
 
-    if (!product) return;
-
-    try {
-      // For now, just show a message since blockchain data doesn't match
-      toast.info("🛒 This product exists in backend but not fully on blockchain yet");
-      
-    } catch (err: any) {
-      console.error("❌ Error:", err);
-      toast.error("Action failed");
+    // ✅ FIX: Ensure image URL is properly formatted before saving to cart
+    let imageUrl = product.image;
+    if (imageUrl && !imageUrl.startsWith('http')) {
+      imageUrl = `http://localhost:3001${product.image}`;
     }
-  };
 
+    // Add to local cart context for UI
+    await addToCart({
+      productId: product.productId,
+      title: product.title,
+      price: product.price,
+      image: imageUrl, // ✅ Now this will be a full URL
+      sellerId: product.sellerId
+    });
+
+
+    toast.success(`✅ ${product.title} added to cart!`);
+
+  } catch (err: any) {
+    console.error("❌ Error adding to cart:", err);
+    
+    if (err.code === "ACTION_REJECTED" || err.message?.includes("rejected")) {
+      toast.error("❌ Transaction rejected by user");
+    } else if (err.reason) {
+      toast.error(`❌ Blockchain error: ${err.reason}`);
+    } else if (err.message?.includes("insufficient funds")) {
+      toast.error("❌ Insufficient funds for transaction");
+    } else if (err.message?.includes("No transaction")) {
+      toast.error("❌ Blockchain service unavailable");
+      // Fallback to local cart even if blockchain fails
+      await addToCart({
+        productId: product.productId,
+        title: product.title,
+        price: product.price,
+        image: product.image,
+        sellerId: product.sellerId
+      });
+      toast.success(`✅ ${product.title} added to local cart (blockchain unavailable)!`);
+    } else {
+      // Generic error - still add to local cart
+      await addToCart({
+        productId: product.productId,
+        title: product.title,
+        price: product.price,
+        image: product.image,
+        sellerId: product.sellerId
+      });
+      toast.success(`✅ ${product.title} added to local cart!`);
+    }
+  } finally {
+    setAddingToCart(false);
+  }
+};
   const getWarrantyText = (warrantySeconds: string) => {
-    const days = Number(warrantySeconds) / (24 * 60 * 60);
-    if (days > 0) {
-      return `${days} day${days > 1 ? 's' : ''} warranty`;
+    try {
+      const seconds = Number(warrantySeconds);
+      if (isNaN(seconds)) return "No warranty";
+      
+      const days = seconds / (24 * 60 * 60);
+      if (days > 0) {
+        return `${Math.round(days)} day${days > 1 ? 's' : ''} warranty`;
+      }
+      return "No warranty";
+    } catch {
+      return "No warranty";
     }
-    return "No warranty";
   };
 
   const getDeliveryDate = (timestamp: string) => {
     try {
-      const date = new Date(Number(timestamp) * 1000);
+      const seconds = Number(timestamp);
+      if (isNaN(seconds) || seconds === 0) return "Delivery time not specified";
+      
+      const date = new Date(seconds * 1000);
       return date.toLocaleDateString('en-US', {
         weekday: 'long',
         year: 'numeric',
@@ -145,6 +275,11 @@ export default function ViewProduct() {
       return "Invalid date";
     }
   };
+
+  // FIXED: Proper undefined check for unitPrice
+  const hasRealBlockchainData = product?.unitPrice !== undefined && 
+                               product?.unitPrice > BigInt(0) && 
+                               product?.productId !== "0";
 
   if (loading) {
     return (
@@ -174,8 +309,6 @@ export default function ViewProduct() {
     );
   }
 
-  const hasBlockchainData = product.productId === "1921959445789603936";
-
   return (
     <div className="max-w-6xl mx-auto p-6">
       {/* Breadcrumb */}
@@ -197,10 +330,19 @@ export default function ViewProduct() {
                 src={`http://localhost:3001${product.image}`}
                 alt={product.title}
                 className="w-full h-full object-cover"
+                onError={(e) => {
+                  // Fixed image fallback - simpler approach
+                  const target = e.currentTarget as HTMLImageElement;
+                  target.style.display = 'none';
+                  // Create fallback element if it doesn't exist
+                  const fallback = target.nextSibling as HTMLElement;
+                  if (fallback) {
+                    fallback.style.display = 'flex';
+                  }
+                }}
               />
-            ) : (
-              <div className="text-6xl text-gray-400">📦</div>
-            )}
+            ) : null}
+            <div className="text-6xl text-gray-400" style={{ display: product.image ? 'none' : 'flex' }}>📦</div>
           </div>
 
           {/* Product Title & Price */}
@@ -209,7 +351,7 @@ export default function ViewProduct() {
             <span className="text-4xl font-bold text-green-600">
               ${product.price}
             </span>
-            {hasBlockchainData ? (
+            {hasRealBlockchainData ? (
               <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
                 🔗 On Blockchain
               </span>
@@ -224,31 +366,28 @@ export default function ViewProduct() {
           <div className="space-y-3">
             <button
               onClick={handleAddToCart}
-              disabled={!account}
+              disabled={addingToCart || !account}
               className="w-full bg-green-600 text-white py-4 px-6 rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-bold text-lg"
             >
-              {!account ? (
-                "Connect Wallet"
-              ) : hasBlockchainData ? (
-                "🛒 Add to Cart (Blockchain)"
+              {addingToCart ? (
+                <span className="flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-3"></div>
+                  Adding...
+                </span>
+              ) : !account ? (
+                "Connect Wallet to Add to Cart"
+              ) : hasRealBlockchainData ? (
+                "🛒 Add to Blockchain Cart"
               ) : (
-                "🛒 Add to Cart (Backend)"
+                "🛒 Add to Local Cart"
               )}
             </button>
           </div>
 
           {!account && (
             <p className="text-center text-sm text-gray-600 mt-3">
-              Connect your wallet to purchase
+              Connect your wallet to add items to cart
             </p>
-          )}
-
-          {!hasBlockchainData && (
-            <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-              <p className="text-yellow-800 text-sm">
-                ⚠️ This product exists in the database but may not be fully listed on blockchain yet.
-              </p>
-            </div>
           )}
         </div>
 
@@ -302,23 +441,6 @@ export default function ViewProduct() {
               )}
             </div>
           </div>
-
-          {/* Status Info */}
-          {hasBlockchainData && (
-            <div className="bg-white rounded-lg shadow-lg border p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Blockchain Status</h2>
-              <div className="grid grid-cols-1 gap-4 text-sm">
-                <div className="flex items-center space-x-2 text-green-600">
-                  <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">✓</div>
-                  <span>Product verified on blockchain</span>
-                </div>
-                <div className="flex items-center space-x-2 text-green-600">
-                  <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">✓</div>
-                  <span>Price secured immutably</span>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>

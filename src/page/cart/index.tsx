@@ -1,1115 +1,155 @@
-// import { BiMinus, BiPlus } from "react-icons/bi";
-// import { cartData, getSelectedItems } from "./data";
-// import { useState } from "react";
-// import {
-//   SelfQRcodeWrapper,
-//   SelfAppBuilder,
-//   type SelfApp,
-// } from "@selfxyz/qrcode";
-// import { ethers } from "ethers";
-
-// const Cart = () => {
-//   const [selfApp, setSelfApp] = useState<SelfApp | null>(null);
-//   const [universalLink, setUniversalLink] = useState("");
-//   const [userId] = useState(ethers.ZeroAddress);
-//   const [paymentrequested, setPaymentrequested] = useState<boolean>(false);
-
-//   const totalPrice = () => {
-//     return cartItemData?.reduce(
-//       (sum, item) => sum + item?.price * item?.quantity,
-//       0
-//     );
-//   };
-//   const [cartItemData, setCartItemData] = useState(cartData);
-
-//   const handleAdd = (id: number) => {
-//     const updatedCart = cartItemData.map((item) =>
-//       item.id === id ? { ...item, quantity: item.quantity + 1 } : item
-//     );
-//     setCartItemData(updatedCart);
-//   };
-
-//   const handleSub = (id: number) => {
-//     const updatedCart = cartItemData.map((item) =>
-//       item.id === id && item?.quantity > 1
-//         ? { ...item, quantity: item.quantity - 1 }
-//         : item
-//     );
-//     setCartItemData(updatedCart);
-//   };
-
-//   const handlePayment = () => {
-//     try {
-//       const app = new SelfAppBuilder({
-//         version: 2,
-//         appName: import.meta.env.NEXT_PUBLIC_SELF_APP_NAME || "Self Workshop",
-//         scope: import.meta.env.NEXT_PUBLIC_SELF_SCOPE || "self-workshop",
-//         endpoint: `${import.meta.env.NEXT_PUBLIC_SELF_ENDPOINT}`,
-//         logoBase64: "https://i.postimg.cc/mrmVf9hm/self.png",
-//         userId: userId,
-//         endpointType: "staging_https",
-//         userIdType: "hex",
-//         userDefinedData: "Bonjour Cannes!",
-//         disclosures: {
-//           /* 1. what you want to verify from users' identity */
-//           minimumAge: 18,
-//           // ofac: false,
-//           // excludedCountries: [countries.BELGIUM],
-
-//           /* 2. what you want users to reveal */
-//           // name: false,
-//           // issuing_state: true,
-//           nationality: true,
-//           // date_of_birth: true,
-//           // passport_number: false,
-//           gender: true,
-//           // expiry_date: false,
-//         },
-//       }).build();
-
-//       setSelfApp(app);
-//       // setUniversalLink(getUniversalLink(app));
-//     } catch (error) {
-//       console.error("Failed to initialize Self app:", error);
-//     }
-//   };
-
-//   const handleSuccessfulVerification = (data: any) => {
-//     alert("success");
-//     console.log(data);
-//   };
-
-//   return (
-//     <div className="w-full px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto py-12">
-//       <h1 className="text-4xl font-light text-gray-800 mb-8">Your Cart</h1>
-//       <div className="flex flex-col lg:flex-row gap-8">
-//         <div className="w-full lg:w-2/3">
-//           {cartItemData?.map((data: any) => (
-//             <div
-//               key={data.id}
-//               className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-center py-4 border-b border-gray-200 hover:bg-gray-50 transition-colors"
-//             >
-//               <div className="flex items-center gap-4">
-//                 <img
-//                   className="w-20 h-20 object-cover rounded-md shadow-sm"
-//                   src={data?.img}
-//                   alt={data?.title}
-//                 />
-//                 <h2 className="text-lg font-medium text-gray-700">
-//                   {data?.title}
-//                 </h2>
-//               </div>
-//               <div>
-//                 <h2 className="text-lg font-semibold text-gray-800">
-//                   ETH {data?.price.toFixed(2)}
-//                 </h2>
-//               </div>
-//               <div className="flex items-center justify-center gap-3">
-//                 <button
-//                   onClick={() => handleSub(data?.id)}
-//                   className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"
-//                 >
-//                   <BiMinus className="text-gray-600" />
-//                 </button>
-//                 <p className="text-lg font-medium">{data?.quantity}</p>
-//                 <button
-//                   onClick={() => handleAdd(data?.id)}
-//                   className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"
-//                 >
-//                   <BiPlus className="text-gray-600" />
-//                 </button>
-//               </div>
-//               <div>
-//                 <h2 className="text-lg font-semibold text-gray-800">
-//                   ETH {(data?.price * data?.quantity).toFixed(2)}
-//                 </h2>
-//               </div>
-//             </div>
-//           ))}
-//         </div>
-//         <div className="w-full lg:w-1/3">
-//           <div className="sticky top-4 bg-white p-6 rounded-lg shadow-md">
-//             <h1 className="text-2xl font-light text-gray-800 border-b border-gray-200 pb-4 mb-4">
-//               Cart Summary
-//             </h1>
-//             <div className="space-y-3">
-//               {getSelectedItems(cartItemData)?.map((data: any) => (
-//                 <div
-//                   key={data.id}
-//                   className="flex items-center justify-between"
-//                 >
-//                   <h3 className="text-base font-medium text-gray-600">
-//                     {data?.title}
-//                   </h3>
-//                   <p className="text-lg font-semibold text-gray-800">
-//                     ETH {data?.price.toFixed(2)}
-//                   </p>
-//                 </div>
-//               ))}
-//               <div className="flex items-center justify-between pt-3 border-t border-gray-200">
-//                 <h3 className="text-base font-medium text-gray-600">
-//                   Shipping Fee
-//                 </h3>
-//                 <p className="text-lg font-semibold text-gray-800">ETH 20.00</p>
-//               </div>
-//               <div className="flex items-center justify-between pt-3 border-t border-gray-200">
-//                 <h3 className="text-lg font-bold text-gray-800">Total</h3>
-//                 <p className="text-xl font-bold text-green-600">
-//                   ETH {(totalPrice() + 20).toFixed(2)}
-//                 </p>
-//               </div>
-//             </div>
-//             <button
-//               onClick={handlePayment}
-//               className="w-full mt-6 py-3 px-6 rounded-md bg-green-600 text-white font-semibold hover:bg-green-700 transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
-//             >
-//               {paymentrequested ? (
-//                 <SelfQRcodeWrapper
-//                   selfApp={selfApp as SelfApp}
-//                   onSuccess={handleSuccessfulVerification}
-//                   onError={() => {
-//                     console.error("Error: Failed to verify identity");
-//                   }}
-//                 />
-//               ) : (
-//                 "Proceed to Payment"
-//               )}
-//             </button>
-//           </div>
-//         </div>
-//       </div>
-//     </div>
-//   );
-// };
-
-// export default Cart;
-
-// ==== version 2 ====
-import { BiMinus, BiPlus } from "react-icons/bi";
-import { cartData, getSelectedItems } from "./data";
-import { useState } from "react";
-import {
-  SelfQRcodeWrapper,
-  SelfAppBuilder,
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-  type SelfApp,
-} from "@selfxyz/qrcode";
-import { ethers } from "ethers";
-
-const Cart = () => {
-  const [cartItemData, setCartItemData] = useState(cartData);
-  const [selfApp, setSelfApp] = useState<SelfApp | null>(null);
-  const [paymentRequested, setPaymentRequested] = useState(false);
-
-  const [userId] = useState(ethers.ZeroAddress);
-
-  const totalPrice = () => {
-    return cartItemData.reduce(
-      (sum, item) => sum + item.price * item.quantity,
-      0
-    );
+import { useCart } from '../../context/CartContext';
+import { useWallet } from '../../context/walletContext';
+import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
+
+export default function CartPage() {
+  const { cartItems, removeFromCart, updateQuantity, clearCart, cartTotal} = useCart();
+  const { account } = useWallet();
+  const navigate = useNavigate();
+
+  const handleRemoveItem = (productId: string) => {
+    removeFromCart(productId);
+    toast.success('Item removed from cart');
   };
 
-  const handleAdd = (id: number) => {
-    setCartItemData((prev) =>
-      prev.map((item) =>
-        item.id === id ? { ...item, quantity: item.quantity + 1 } : item
-      )
-    );
-  };
-
-  const handleSub = (id: number) => {
-    setCartItemData((prev) =>
-      prev.map((item) =>
-        item.id === id && item.quantity > 1
-          ? { ...item, quantity: item.quantity - 1 }
-          : item
-      )
-    );
-  };
-
-  const handlePayment = () => {
-    try {
-      const app = new SelfAppBuilder({
-        version: 2,
-        appName: import.meta.env.NEXT_PUBLIC_SELF_APP_NAME || "Self Workshop",
-        scope: import.meta.env.NEXT_PUBLIC_SELF_SCOPE || "self-workshop",
-        endpoint: `${import.meta.env.NEXT_PUBLIC_SELF_ENDPOINT}`,
-        logoBase64: "https://i.postimg.cc/mrmVf9hm/self.png",
-        userId: userId,
-        endpointType: "staging_https",
-        userIdType: "hex",
-        userDefinedData: "Bonjour Cannes!",
-        disclosures: {
-          minimumAge: 18,
-          nationality: true,
-          gender: true,
-        },
-      }).build();
-
-      setSelfApp(app);
-      setPaymentRequested(true); // ✅ Show the QR code wrapper
-    } catch (error) {
-      console.error("Failed to initialize Self app:", error);
+  const handleUpdateQuantity = (productId: string, newQuantity: number) => {
+    if (newQuantity < 1) {
+      handleRemoveItem(productId);
+      return;
     }
+    updateQuantity(productId, newQuantity);
   };
 
-  const handleSuccessfulVerification = (data: any) => {
-    alert("Payment Successful");
-    console.log("Verification data:", data);
+  const handleCheckout = () => {
+    if (!account) {
+      toast.error('Please connect your wallet first');
+      return;
+    }
+    // Add your checkout logic here
+    toast.info('Proceeding to checkout...');
+     navigate('/checkout'); // Uncomment if you have a checkout page
   };
+
+  
+  const handleContinueShopping = () => {
+    navigate('/products');
+  };
+
+  // ✅ Use the pre-calculated cartTotal instead of recalculating
+  // const totalPrice = cartTotal; // You can use cartTotal directly
+
+  if (cartItems.length === 0) {
+    return (
+      <div className="max-w-4xl mx-auto p-6">
+        <div className="text-center py-12 bg-white rounded-lg shadow border">
+          <div className="text-6xl mb-4">🛒</div>
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">Your Cart is Empty</h2>
+          <p className="text-gray-600 mb-6">Add some products to get started!</p>
+          <button
+            onClick={handleContinueShopping}
+            className="bg-neutral-800 text-white px-6 py-3 rounded-lg hover:bg-neutral-700"
+          >
+            Browse Products
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="w-full px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto py-12">
-      <h1 className="text-4xl font-light text-gray-800 mb-8">Your Cart</h1>
-      <div className="flex flex-col lg:flex-row gap-8">
-        {/* Cart Items */}
-        <div className="w-full lg:w-2/3">
-          {cartItemData.map((data) => (
-            <div
-              key={data.id}
-              className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-center py-4 border-b border-gray-200 hover:bg-gray-50 transition-colors"
-            >
-              <div className="flex items-center gap-4">
-                <img
-                  className="w-20 h-20 object-cover rounded-md shadow-sm"
-                  src={data.img}
-                  alt={data.title}
-                />
-                <h2 className="text-lg font-medium text-gray-700">
-                  {data.title}
-                </h2>
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold text-gray-800">
-                  ETH {data.price.toFixed(2)}
-                </h2>
-              </div>
-              <div className="flex items-center justify-center gap-3">
-                <button
-                  onClick={() => handleSub(data.id)}
-                  className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"
-                >
-                  <BiMinus className="text-gray-600" />
-                </button>
-                <p className="text-lg font-medium">{data.quantity}</p>
-                <button
-                  onClick={() => handleAdd(data.id)}
-                  className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"
-                >
-                  <BiPlus className="text-gray-600" />
-                </button>
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold text-gray-800">
-                  ETH {(data.price * data.quantity).toFixed(2)}
-                </h2>
-              </div>
-            </div>
-          ))}
+    <div className="max-w-6xl mx-auto p-6">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold text-gray-900">Shopping Cart</h1>
+        <div className="flex space-x-4">
+          <button
+            onClick={handleContinueShopping}
+            className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700"
+          >
+            Continue Shopping
+          </button>
+          <button
+            onClick={clearCart}
+            className="text-red-600 hover:text-red-800 font-medium border border-red-600 px-4 py-2 rounded-lg hover:bg-red-50"
+          >
+            Clear Cart
+          </button>
         </div>
+      </div>
 
-        {/* Summary + Payment */}
-        <div className="w-full lg:w-1/3">
-          <div className="sticky top-4 bg-white p-6 rounded-lg shadow-md">
-            <h1 className="text-2xl font-light text-gray-800 border-b border-gray-200 pb-4 mb-4">
-              Cart Summary
-            </h1>
-            <div className="space-y-3">
-              {getSelectedItems(cartItemData).map((data: any) => (
-                <div
-                  key={data.id}
-                  className="flex items-center justify-between"
-                >
-                  <h3 className="text-base font-medium text-gray-600">
-                    {data.title}
-                  </h3>
-                  <p className="text-lg font-semibold text-gray-800">
-                    ETH {data.price.toFixed(2)}
-                  </p>
-                </div>
-              ))}
-
-              <div className="flex items-center justify-between pt-3 border-t border-gray-200">
-                <h3 className="text-base font-medium text-gray-600">
-                  Shipping Fee
-                </h3>
-                <p className="text-lg font-semibold text-gray-800">ETH 20.00</p>
-              </div>
-
-              <div className="flex items-center justify-between pt-3 border-t border-gray-200">
-                <h3 className="text-lg font-bold text-gray-800">Total</h3>
-                <p className="text-xl font-bold text-green-600">
-                  ETH {(totalPrice() + 20).toFixed(2)}
-                </p>
-              </div>
+      <div className="bg-white rounded-lg shadow-lg border mb-6">
+        {cartItems.map((item) => (
+  <div key={item.productId} className="flex items-center p-6 border-b last:border-b-0">
+    {item.image && (
+      <img
+        src={item.image.startsWith('http') ? item.image : `http://localhost:3001${item.image}`}
+        alt={item.title}
+        className="w-20 h-20 object-cover rounded-lg mr-4"
+        onError={(e) => {
+          e.currentTarget.style.display = 'none';
+        }}
+      />
+    )}
+ 
+            <div className="flex-1">
+              <h3 className="text-lg font-semibold text-gray-900 mb-1">{item.title}</h3>
+              <p className="text-gray-600 text-sm mb-1">Seller ID: {item.sellerId}</p>
+              <p className="text-green-600 font-bold">${item.price}</p>
+            </div>
+            
+            <div className="flex items-center space-x-3 mr-4">
+              <button
+                onClick={() => handleUpdateQuantity(item.productId, item.quantity - 1)}
+                className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center hover:bg-gray-300 transition-colors"
+              >
+                -
+              </button>
+              <span className="w-8 text-center font-medium">{item.quantity}</span>
+              <button
+                onClick={() => handleUpdateQuantity(item.productId, item.quantity + 1)}
+                className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center hover:bg-gray-300 transition-colors"
+              >
+                +
+              </button>
             </div>
 
-            {/* Payment Button */}
-            {!paymentRequested ? (
+            <div className="text-right">
+              <p className="font-semibold text-gray-900">
+                ${(parseFloat(item.price) * item.quantity).toFixed(2)}
+              </p>
               <button
-                onClick={handlePayment}
-                className="w-full mt-6 py-3 px-6 rounded-md bg-green-600 text-white font-semibold hover:bg-green-700 transition-colors focus:outline-none"
+                onClick={() => handleRemoveItem(item.productId)}
+                className="text-red-500 hover:text-red-700 text-sm mt-1"
               >
-                Proceed to Payment
+                Remove
               </button>
-            ) : (
-              <div className="mt-6 flex flex-col items-center gap-4">
-                {paymentRequested && selfApp ? (
-                  <SelfQRcodeWrapper
-                    selfApp={selfApp}
-                    onSuccess={() => handleSuccessfulVerification}
-                    onError={() => {
-                      console.error("Error: Failed to verify identity");
-                    }}
-                  />
-                ) : (
-                  "Proceed to Payment"
-                )}
-              </div>
-            )}
+            </div>
           </div>
+        ))}
+      </div>
+
+      <div className="bg-white rounded-lg shadow-lg border p-6">
+        <div className="flex justify-between items-center mb-4">
+          <span className="text-xl font-semibold">Total:</span>
+          <span className="text-2xl font-bold text-green-600">${cartTotal.toFixed(2)}</span>
+        </div>
+        
+        <div className="space-y-3">
+          <button
+            onClick={handleCheckout}
+            disabled={!account}
+            className="w-full bg-green-600 text-white py-4 px-6 rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-bold text-lg transition-colors"
+          >
+            {!account ? 'Connect Wallet to Checkout' : 'Proceed to Checkout'}
+          </button>
+          
+          {!account && (
+            <p className="text-center text-sm text-gray-600">
+              Please connect your wallet to complete checkout
+            </p>
+          )}
         </div>
       </div>
     </div>
   );
-};
-
-export default Cart;
+}
