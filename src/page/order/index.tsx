@@ -1,408 +1,244 @@
-import { useState, useEffect } from "react";
-import { useWallet } from "../../context/walletContext";
-import { toast } from "sonner";
-import { BiDotsVerticalRounded } from "react-icons/bi";
-import { incomingData, outgoingData } from "./data";
+import { useState } from 'react';
+import { useCart } from '../../context/CartContext';
+import { useWallet } from '../../context/walletContext';
+import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
 
-interface Order {
-  id: string;
+// Define proper types for cart items
+interface CartItem {
   productId: string;
   title: string;
   price: string;
-  image?: string;
   quantity: number;
-  sellerId: string;
-  buyerId: string;
-  status: "pending" | "paid" | "shipped" | "delivered" | "cancelled";
-  paymentRef: string;
-  createdAt: string;
-  totalAmount: string;
+  image?: string;
 }
 
-const Order = () => {
-  const [activeTab, setActiveTab] = useState<"incoming" | "outgoing">("incoming");
-  const [modal, setModal] = useState({
-    open: false,
-    orderId: null as string | null,
-    action: null as string | null,
-  });
-  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
+export default function CheckoutPage() {
+  const { cartItems, cartTotal, clearCart } = useCart();
   const { account } = useWallet();
+  const navigate = useNavigate();
+  const [processingPayment, setProcessingPayment] = useState(false);
+  const [selectedPayment, setSelectedPayment] = useState<'eth' | 'stablecoin'>('eth');
 
-  // Convert your existing data to our order format
-  const convertToOrders = () => {
-    const incomingOrders: Order[] = incomingData.map((item, _index) => ({
-      id: item.id,
-      productId: `prod_${item.id}`,
-      title: item.title,
-      price: (item.priceEth * 1000).toString(), // Convert ETH to USD approximate
-      image: item.img, // ✅ Use the imported image directly
-      quantity: 1,
-      sellerId: "seller123",
-      buyerId: "buyer456",
-      status: "paid" as const,
-      paymentRef: `pay_${item.id}`,
-      createdAt: "2024-01-15",
-      totalAmount: (item.priceEth * 1000).toString()
-    }));
-
-    const outgoingOrders: Order[] = outgoingData.map((item, _index) => ({
-      id: item.id,
-      productId: `prod_${item.id}`,
-      title: item.title,
-      price: (item.priceEth * 1000).toString(),
-      image: item.img, // ✅ Use the imported image directly
-      quantity: 1,
-      sellerId: "seller789",
-      buyerId: "buyer123",
-      status: "shipped" as const,
-      paymentRef: `pay_out_${item.id}`,
-      createdAt: "2024-01-16",
-      totalAmount: (item.priceEth * 1000).toString()
-    }));
-
-    return { incomingOrders, outgoingOrders };
+  const handleContinueShopping = () => {
+    navigate('/products');
   };
 
-  useEffect(() => {
-    loadOrders();
-  }, [account]);
+  const handleBackToCart = () => {
+    navigate('/cart');
+  };
 
-  const loadOrders = async () => {
+  const handleProceedToPayment = async () => {
+    if (!account) {
+      toast.error('Please connect your wallet first');
+      return;
+    }
+
+    if (selectedPayment === 'stablecoin') {
+      toast.info('Stablecoin payments coming soon!');
+      return;
+    }
+
     try {
-      setLoading(true);
-      const { incomingOrders, outgoingOrders } = convertToOrders();
+      setProcessingPayment(true);
+      toast.info('Processing payment with ETH...');
       
-      // Set orders based on active tab
-      if (activeTab === "incoming") {
-        setOrders(incomingOrders);
-      } else {
-        setOrders(outgoingOrders);
-      }
-    } catch (error) {
-      console.error("Error loading orders:", error);
-      toast.error("Failed to load orders");
+      // Simulate payment processing
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      toast.success('✅ Payment successful!');
+      
+      // Clear cart after successful payment
+      clearCart();
+      
+      // Navigate to order confirmation
+      navigate('/order-confirmation', { 
+        state: { 
+          amount: cartTotal,
+          paymentMethod: 'ETH',
+          items: cartItems.length
+        } 
+      });
+      
+    } catch (err: any) {
+      console.error('❌ Payment error:', err);
+      toast.error('❌ Payment failed. Please try again.');
     } finally {
-      setLoading(false);
+      setProcessingPayment(false);
     }
   };
 
-  // Reload orders when tab changes
-  useEffect(() => {
-    loadOrders();
-  }, [activeTab]);
-
-  const toggleMenu = (orderId: string) => {
-    setOpenMenuId((prev) => (prev === orderId ? null : orderId));
+  const formatImageUrl = (imageUrl: string | undefined) => {
+    if (!imageUrl) return null;
+    if (imageUrl.startsWith('http')) return imageUrl;
+    return `http://localhost:3001${imageUrl}`;
   };
 
-  const openModal = (action: string, orderId: string) => {
-    setModal({ open: true, orderId, action });
-    setOpenMenuId(null);
-  };
-
-  const closeModal = () => {
-    setModal({ open: false, orderId: null, action: null });
-  };
-
-  const confirmAction = async () => {
-    if (!modal.orderId || !modal.action) return;
-
-    try {
-      const order = orders.find(o => o.id === modal.orderId);
-      if (!order) return;
-
-      switch (modal.action) {
-        case "mark_shipped":
-          await handleMarkAsShipped(order);
-          break;
-        case "confirm_delivery":
-          await handleConfirmDelivery(order);
-          break;
-        case "cancel_order":
-          await handleCancelOrder(order);
-          break;
-        case "request_refund":
-          await handleRequestRefund();
-          break;
-        default:
-          console.log(`Action ${modal.action} on order ${modal.orderId}`);
-      }
-
-      closeModal();
-      loadOrders(); // Refresh orders
-    } catch (error) {
-      console.error("Error processing action:", error);
-      toast.error("Failed to process action");
-    }
-  };
-
-  const handleMarkAsShipped = async (_order: Order) => {
-    try {
-      toast.info("Updating delivery status...");
-      // For demo, we'll just show success without calling contract
-      toast.success("Order marked as shipped!");
-    } catch (error) {
-      throw error;
-    }
-  };
-
-  const handleConfirmDelivery = async (_order: Order) => {
-    try {
-      toast.info("Confirming delivery...");
-      // For demo, we'll just show success without calling contract
-      toast.success("Delivery confirmed! Funds will be released to seller.");
-    } catch (error) {
-      throw error;
-    }
-  };
-
-  const handleCancelOrder = async (_order: Order) => {
-    try {
-      toast.info("Cancelling order...");
-      // For demo, we'll just show success without calling contract
-      toast.success("Order cancelled successfully");
-    } catch (error) {
-      throw error;
-    }
-  };
-
-  const handleRequestRefund = async () => {
-    try {
-      toast.info("Processing refund request...");
-      toast.success("Refund request submitted");
-    } catch (error) {
-      throw error;
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "pending": return "bg-yellow-100 text-yellow-700";
-      case "paid": return "bg-blue-100 text-blue-700";
-      case "shipped": return "bg-purple-100 text-purple-700";
-      case "delivered": return "bg-green-100 text-green-700";
-      case "cancelled": return "bg-red-100 text-red-700";
-      default: return "bg-gray-100 text-gray-700";
-    }
-  };
-
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case "pending": return "Pending Payment";
-      case "paid": return "Payment Received";
-      case "shipped": return "Shipped";
-      case "delivered": return "Delivered";
-      case "cancelled": return "Cancelled";
-      default: return status;
-    }
-  };
-
-  // Filter orders based on user role and tab
-  const filteredOrders = orders;
-
-  if (loading) {
+  if (cartItems.length === 0) {
     return (
-      <div className="w-full min-h-screen px-5 py-10 bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neutral-800 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading orders...</p>
+      <div className="max-w-4xl mx-auto p-6">
+        <div className="text-center py-12 bg-white rounded-lg shadow border">
+          <div className="text-6xl mb-4">🛒</div>
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">Your Cart is Empty</h2>
+          <p className="text-gray-600 mb-6">Add some products to checkout!</p>
+          <button
+            onClick={handleContinueShopping}
+            className="bg-neutral-800 text-white px-6 py-3 rounded-lg hover:bg-neutral-700"
+          >
+            Browse Products
+          </button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="w-full min-h-screen px-5 py-10 bg-gray-50">
+    <div className="max-w-4xl mx-auto p-6">
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Order Management</h1>
-        <p className="text-gray-600 mt-2">Manage your incoming and outgoing orders</p>
-      </div>
-
-      {/* Tabs - NOW CLICKABLE */}
-      <div className="flex gap-4 mb-8">
+      <div className="flex items-center justify-between mb-8">
+        <h1 className="text-3xl font-bold text-gray-900">Checkout</h1>
         <button
-          onClick={() => setActiveTab("incoming")}
-          className={`px-6 py-3 rounded-lg font-semibold transition ${
-            activeTab === "incoming" 
-              ? "bg-black text-white" 
-              : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
-          }`}
+          onClick={handleBackToCart}
+          className="text-blue-600 hover:text-blue-800 font-medium"
         >
-          📥 Incoming Orders
-        </button>
-        <button
-          onClick={() => setActiveTab("outgoing")}
-          className={`px-6 py-3 rounded-lg font-semibold transition ${
-            activeTab === "outgoing" 
-              ? "bg-black text-white" 
-              : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
-          }`}
-        >
-          📤 Outgoing Orders
+          ← Back to Cart
         </button>
       </div>
 
-      {/* Orders Table */}
-      {filteredOrders.length >= 1 ? (
-        <div className="overflow-x-auto bg-white shadow-lg rounded-lg">
-          <table className="min-w-full text-left">
-            <thead className="bg-gray-100">
-              <tr>
-                <th className="px-6 py-4 font-semibold text-gray-700">Product</th>
-                <th className="px-6 py-4 font-semibold text-gray-700">Details</th>
-                <th className="px-6 py-4 font-semibold text-gray-700">Amount</th>
-                <th className="px-6 py-4 font-semibold text-gray-700">Status</th>
-                <th className="px-6 py-4 font-semibold text-gray-700">Date</th>
-                <th className="px-6 py-4 font-semibold text-gray-700">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredOrders.map((order) => (
-                <tr key={order.id} className="border-b hover:bg-gray-50">
-                  <td className="px-6 py-4">
-                    {/* ✅ IMAGES WILL NOW SHOW - using imported images directly */}
-                    {order.image ? (
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Left Column - Order Summary */}
+        <div className="bg-white rounded-lg shadow-lg border p-6">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">Order Summary</h2>
+          
+          <div className="space-y-4 mb-6">
+            {(cartItems as CartItem[]).map((item: CartItem) => {
+              const imageUrl = formatImageUrl(item.image);
+              const price = parseFloat(item.price);
+              const quantity = item.quantity || 0;
+              const itemTotal = price * quantity;
+
+              return (
+                <div key={item.productId} className="flex items-center justify-between py-3 border-b">
+                  <div className="flex items-center">
+                    {imageUrl ? (
                       <img
-                        src={order.image}
-                        alt={order.title}
-                        className="w-16 h-16 object-cover rounded-lg border"
+                        src={imageUrl}
+                        alt={item.title}
+                        className="w-12 h-12 object-cover rounded-lg mr-3"
                         onError={(e) => {
-                          // Fallback if image fails to load
                           e.currentTarget.style.display = 'none';
                         }}
                       />
                     ) : (
-                      <div className="w-16 h-16 bg-gray-200 rounded-lg flex items-center justify-center text-gray-400 border">
+                      <div className="w-12 h-12 bg-gray-200 rounded-lg flex items-center justify-center text-gray-400 mr-3">
                         📦
                       </div>
                     )}
-                  </td>
-                  <td className="px-6 py-4">
                     <div>
-                      <p className="font-medium text-gray-900">{order.title}</p>
-                      <p className="text-sm text-gray-600">Qty: {order.quantity}</p>
-                      <p className="text-xs text-gray-500">ID: {order.productId}</p>
+                      <h3 className="font-medium text-gray-900">{item.title}</h3>
+                      <p className="text-sm text-gray-600">Qty: {quantity}</p>
+                      <p className="text-xs text-gray-500">ID: {item.productId}</p>
                     </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <p className="font-semibold text-green-600">${order.totalAmount}</p>
-                    <p className="text-sm text-gray-600">${order.price} each</p>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`text-xs px-3 py-1 rounded-full ${getStatusColor(order.status)}`}>
-                      {getStatusText(order.status)}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-600">
-                    {order.createdAt}
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="relative inline-block">
-                      <button
-                        onClick={() => toggleMenu(order.id)}
-                        className="text-gray-600 hover:text-black p-2 rounded hover:bg-gray-100"
-                      >
-                        <BiDotsVerticalRounded size={20} />
-                      </button>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-semibold text-gray-900">
+                      ${itemTotal.toFixed(2)}
+                    </p>
+                    <p className="text-sm text-gray-600">${price.toFixed(2)} each</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
 
-                      {openMenuId === order.id && (
-                        <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
-                          {activeTab === "incoming" ? (
-                            // Seller actions (Incoming tab)
-                            <>
-                              {order.status === "paid" && (
-                                <button
-                                  onClick={() => openModal("mark_shipped", order.id)}
-                                  className="block w-full text-left px-4 py-3 text-sm hover:bg-gray-50 border-b"
-                                >
-                                  🚚 Mark as Shipped
-                                </button>
-                              )}
-                              {order.status === "paid" && (
-                                <button
-                                  onClick={() => openModal("cancel_order", order.id)}
-                                  className="block w-full text-left px-4 py-3 text-sm hover:bg-gray-50 text-red-600"
-                                >
-                                  ❌ Cancel Order
-                                </button>
-                              )}
-                            </>
-                          ) : (
-                            // Buyer actions (Outgoing tab)
-                            <>
-                              {order.status === "shipped" && (
-                                <button
-                                  onClick={() => openModal("confirm_delivery", order.id)}
-                                  className="block w-full text-left px-4 py-3 text-sm hover:bg-gray-50 border-b"
-                                >
-                                  ✅ Confirm Delivery
-                                </button>
-                              )}
-                              {(order.status === "paid" || order.status === "shipped") && (
-                                <button
-                                  onClick={() => openModal("request_refund", order.id)}
-                                  className="block w-full text-left px-4 py-3 text-sm hover:bg-gray-50 text-red-600"
-                                >
-                                  💰 Request Refund
-                                </button>
-                              )}
-                            </>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <div className="flex flex-col items-center justify-center gap-4 mt-10 bg-white p-12 rounded-lg shadow">
-          <div className="text-6xl">📦</div>
-          <h2 className="text-xl font-semibold text-gray-700">No orders yet</h2>
-          <p className="text-gray-500 text-center max-w-md">
-            {activeTab === "incoming" 
-              ? "You don't have any incoming orders yet. Orders will appear here when customers purchase your products."
-              : "You haven't placed any orders yet. Start shopping to see your order history here."
-            }
-          </p>
-        </div>
-      )}
-
-      {/* Confirmation Modal */}
-      {modal.open && (
-        <div className="fixed inset-0 bg-black bg-opacity-30 backdrop-blur-sm flex justify-center items-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-sm">
-            <h2 className="text-lg font-semibold mb-4 capitalize">
-              Confirm {modal.action?.replace('_', ' ')}
-            </h2>
-            <p className="text-sm text-gray-600 mb-6">
-              Are you sure you want to <b>{modal.action?.replace('_', ' ')}</b> this order?
-            </p>
-            <div className="flex justify-center gap-4">
-              <button
-                onClick={confirmAction}
-                className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 font-medium"
-              >
-                Confirm
-              </button>
-              <button
-                onClick={closeModal}
-                className="bg-gray-300 text-black px-4 py-2 rounded-lg hover:bg-gray-400 font-medium"
-              >
-                Cancel
-              </button>
+          <div className="border-t pt-4">
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-gray-600">Subtotal:</span>
+              <span className="font-semibold">${cartTotal.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-gray-600">Shipping:</span>
+              <span className="font-semibold">$0.00</span>
+            </div>
+            <div className="flex justify-between items-center text-lg font-bold border-t pt-2">
+              <span>Total:</span>
+              <span className="text-green-600">${cartTotal.toFixed(2)}</span>
             </div>
           </div>
         </div>
-      )}
+
+        {/* Right Column - Payment Method */}
+        <div className="bg-white rounded-lg shadow-lg border p-6">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">Payment Method</h2>
+          
+          <div className="space-y-4">
+            {/* ETH Payment Option */}
+            <div 
+              onClick={() => setSelectedPayment('eth')}
+              className={`border-2 rounded-lg p-4 cursor-pointer transition-all ${
+                selectedPayment === 'eth' 
+                  ? 'border-blue-500 bg-blue-50' 
+                  : 'border-gray-300 hover:border-blue-300'
+              }`}
+            >
+              <div className="flex items-center">
+                <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center mr-3">
+                  Ξ
+                </div>
+                <div>
+                  <h3 className={`font-semibold ${
+                    selectedPayment === 'eth' ? 'text-blue-700' : 'text-gray-900'
+                  }`}>
+                    Pay with Ethereum
+                  </h3>
+                  <p className="text-sm text-gray-600">Pay directly with ETH</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Stablecoin Payment Option */}
+            <div 
+              onClick={() => toast.info('Stablecoin payments coming soon!')}
+              className="border rounded-lg p-4 cursor-pointer opacity-50 hover:opacity-70 transition-opacity"
+            >
+              <div className="flex items-center">
+                <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center mr-3">
+                  $
+                </div>
+                <div>
+                  <h3 className="font-semibold">Pay with Stablecoin</h3>
+                  <p className="text-sm text-gray-600">USDC, DAI, etc. (Coming Soon)</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-6">
+            <button
+              onClick={handleProceedToPayment}
+              disabled={!account || processingPayment}
+              className="w-full bg-green-600 text-white py-4 px-6 rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-bold text-lg transition-colors"
+            >
+              {processingPayment ? (
+                <span className="flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-3"></div>
+                  Processing...
+                </span>
+              ) : !account ? (
+                'Connect Wallet to Pay'
+              ) : (
+                `Pay Now with ${selectedPayment === 'eth' ? 'ETH' : 'Stablecoin'}`
+              )}
+            </button>
+            
+            {!account && (
+              <p className="text-center text-sm text-gray-600 mt-3">
+                Please connect your wallet to complete payment
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
-};
-
-export default Order;
+}

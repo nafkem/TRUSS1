@@ -1,210 +1,338 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { toast } from 'sonner';
-import { useWallet } from './walletContext';
+import React, { createContext, useContext, useReducer, ReactNode } from 'react';
+import { ecommerceService } from '../contracts/ecommerce/ecommerceService';
+import { useWallet } from '../context/walletContext';
+import { userService } from '../contracts/user/userService';
 
+// Define CartItem interface
 export interface CartItem {
   productId: string;
   title: string;
   price: string;
-  image?: string;
   quantity: number;
-  blockchainAdded: boolean;
-  sellerId?: string;
+  image?: string;
+  sellerId: string;
 }
 
-interface CartContextType {
-  // State
+interface CartState {
   cartItems: CartItem[];
-  isLoading: boolean;
-  
-  // Actions
-  addToCart: (product: Omit<CartItem, 'quantity' | 'blockchainAdded'>) => Promise<void>;
-  removeFromCart: (productId: string) => void;
-  updateQuantity: (productId: string, quantity: number) => void;
-  clearCart: () => void;
-  
-  // Computed values
   cartTotal: number;
-  itemCount: number;
-  getItemQuantity: (productId: string) => number;
-  isInCart: (productId: string) => boolean;
+  isLoading: boolean;
+}
+
+interface CartContextType extends CartState {
+  addToCart: (item: CartItem) => Promise<void>;
+  removeFromCart: (productId: string) => Promise<void>;
+  updateQuantity: (productId: string, quantity: number) => Promise<void>;
+  clearCart: () => Promise<void>;
+  refreshCart: () => Promise<void>;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
+
+// Define action types
+type CartAction =
+  | { type: 'ADD_TO_CART'; payload: CartItem }
+  | { type: 'REMOVE_FROM_CART'; payload: string }
+  | { type: 'UPDATE_QUANTITY'; payload: { productId: string; quantity: number } }
+  | { type: 'CLEAR_CART' }
+  | { type: 'SET_CART'; payload: CartItem[] }
+  | { type: 'SET_LOADING'; payload: boolean };
+
+// Cart reducer implementation
+const cartReducer = (state: CartState, action: CartAction): CartState => {
+  switch (action.type) {
+    case 'ADD_TO_CART': {
+      const existingItem = state.cartItems.find(item => item.productId === action.payload.productId);
+      if (existingItem) {
+        return {
+          ...state,
+          cartItems: state.cartItems.map(item =>
+            item.productId === action.payload.productId
+              ? { ...item, quantity: item.quantity + action.payload.quantity }
+              : item
+          ),
+          cartTotal: state.cartTotal + (parseFloat(action.payload.price) * action.payload.quantity)
+        };
+      }
+      return {
+        ...state,
+        cartItems: [...state.cartItems, action.payload],
+        cartTotal: state.cartTotal + (parseFloat(action.payload.price) * action.payload.quantity)
+      };
+    }
+
+    case 'REMOVE_FROM_CART': {
+      const itemToRemove = state.cartItems.find(item => item.productId === action.payload);
+      if (!itemToRemove) return state;
+      
+      const removeTotal = parseFloat(itemToRemove.price) * itemToRemove.quantity;
+      
+      return {
+        ...state,
+        cartItems: state.cartItems.filter(item => item.productId !== action.payload),
+        cartTotal: state.cartTotal - removeTotal
+      };
+    }
+
+    case 'UPDATE_QUANTITY': {
+      const itemToUpdate = state.cartItems.find(item => item.productId === action.payload.productId);
+      if (!itemToUpdate) return state;
+
+      const oldItemTotal = parseFloat(itemToUpdate.price) * itemToUpdate.quantity;
+      const newItemTotal = parseFloat(itemToUpdate.price) * action.payload.quantity;
+
+      return {
+        ...state,
+        cartItems: state.cartItems.map(item =>
+          item.productId === action.payload.productId
+            ? { ...item, quantity: action.payload.quantity }
+            : item
+        ),
+        cartTotal: state.cartTotal - oldItemTotal + newItemTotal
+      };
+    }
+
+    case 'CLEAR_CART':
+      return {
+        ...state,
+        cartItems: [],
+        cartTotal: 0
+      };
+
+    case 'SET_CART': {
+      const calculatedTotal = action.payload.reduce((total, item) => {
+        return total + (parseFloat(item.price) * item.quantity);
+      }, 0);
+      
+      return {
+        ...state,
+        cartItems: action.payload,
+        cartTotal: calculatedTotal
+      };
+    }
+
+    case 'SET_LOADING':
+      return {
+        ...state,
+        isLoading: action.payload
+      };
+
+    default:
+      return state;
+  }
+};
+
+// Initial state
+const initialState: CartState = {
+  cartItems: [],
+  cartTotal: 0,
+  isLoading: false
+};
 
 interface CartProviderProps {
   children: ReactNode;
 }
 
 export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
-  const [cartItems, setCartItems] = useState<CartItem[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [state, dispatch] = useReducer(cartReducer, initialState);
   const { account } = useWallet();
 
-  // Load cart from localStorage when account changes
-  useEffect(() => {
-    if (account) {
-      try {
-        const savedCart = localStorage.getItem(`cart_${account}`);
-        if (savedCart) {
-          const parsedCart = JSON.parse(savedCart);
-          setCartItems(Array.isArray(parsedCart) ? parsedCart : []);
-        }
-      } catch (error) {
-        console.error('❌ Error loading cart from storage:', error);
-        setCartItems([]);
-      }
-    } else {
-      setCartItems([]);
+  // Get REAL user ID from user contract
+  const getUserIdFromAddress = async (address: string): Promise<bigint> => {
+    if (!address) {
+      console.error("❌ No address provided");
+      return BigInt(0);
     }
-  }, [account]);
-
-  // Save cart to localStorage whenever it changes
-  useEffect(() => {
-    if (account && cartItems.length > 0) {
-      try {
-        localStorage.setItem(`cart_${account}`, JSON.stringify(cartItems));
-      } catch (error) {
-        console.error('❌ Error saving cart to storage:', error);
-      }
-    }
-  }, [cartItems, account]);
-
-  /**
-   * Add product to cart or increment quantity if already exists
-   */
-  const addToCart = async (product: Omit<CartItem, 'quantity' | 'blockchainAdded'>): Promise<void> => {
+    
     try {
-      setIsLoading(true);
+      console.log("🔍 Getting user data for address:", address);
+      const userData = await userService.getUserData(address);
+      console.log("📋 User data from contract:", userData);
       
-      const existingItem = cartItems.find(item => item.productId === product.productId);
+      const userId = userData.userId;
       
-      if (existingItem) {
-        // Increment quantity
-        setCartItems(prevItems =>
-          prevItems.map(item =>
-            item.productId === product.productId
-              ? { ...item, quantity: item.quantity + 1 }
-              : item
-          )
-        );
-        toast.success(`➕ ${product.title} quantity updated`);
-      } else {
-        // Add new item
-        const newItem: CartItem = {
-          ...product,
-          quantity: 1,
-          blockchainAdded: false
-        };
-        
-        setCartItems(prevItems => [...prevItems, newItem]);
-        toast.success(`🛒 ${product.title} added to cart`);
+      if (!userId || userId === 0) {
+        console.error("❌ User not registered or user ID is 0 for address:", address);
+        return BigInt(0);
       }
+      
+      const userIdBigInt = BigInt(userId);
+      console.log("✅ Found user ID:", userIdBigInt.toString());
+      return userIdBigInt;
+      
     } catch (error) {
-      console.error('❌ Error adding to cart:', error);
-      toast.error('Failed to add item to cart');
-    } finally {
-      setIsLoading(false);
+      console.error('❌ Error getting user ID from contract:', error);
+      return BigInt(0);
     }
   };
 
-  /**
-   * Remove item from cart completely
-   */
-  const removeFromCart = (productId: string): void => {
-    const item = cartItems.find(item => item.productId === productId);
-    setCartItems(prevItems => prevItems.filter(item => item.productId !== productId));
-    
-    if (item) {
-      toast.info(`🗑️ ${item.title} removed from cart`);
+  const addToCart = async (item: CartItem) => {
+    if (!account) {
+      throw new Error("Please connect your wallet first");
+    }
+
+    try {
+      console.log("➕ Adding to blockchain cart:", item);
+      
+      // Get user ID for blockchain operations
+      const userId = await getUserIdFromAddress(account);
+      if (userId === BigInt(0)) {
+        throw new Error("User not registered on blockchain");
+      }
+
+      console.log("🔗 Calling blockchain: addProductToCart...");
+      
+      // ✅ THIS WILL TRIGGER METAMASK POPUP
+      const result = await ecommerceService.addProductToCart(item.productId, item.quantity);
+      
+      console.log("⏳ Waiting for transaction confirmation...");
+      
+      // Wait for transaction to be mined
+      if (result && result.tx) {
+        await result.tx.wait();
+        console.log("✅ Blockchain transaction confirmed!");
+      }
+
+      // Only update local state AFTER blockchain success
+      dispatch({ type: 'ADD_TO_CART', payload: item });
+      console.log("✅ Successfully added to blockchain cart");
+      
+    } catch (error) {
+      console.error('❌ Error adding to blockchain cart:', error);
+      throw error;
     }
   };
 
-  /**
-   * Update quantity of specific item
-   */
-  const updateQuantity = (productId: string, quantity: number): void => {
-    if (quantity <= 0) {
-      removeFromCart(productId);
-      return;
+  const removeFromCart = async (productId: string) => {
+    if (!account) {
+      throw new Error("Please connect your wallet first");
     }
-    
-    setCartItems(prevItems =>
-      prevItems.map(item =>
-        item.productId === productId ? { ...item, quantity } : item
-      )
-    );
+
+    try {
+      console.log("➖ Removing from blockchain cart:", productId);
+      
+      // Get user ID for blockchain operations
+      const userId = await getUserIdFromAddress(account);
+      if (userId === BigInt(0)) {
+        throw new Error("User not registered on blockchain");
+      }
+
+      console.log("🔗 Calling blockchain: removeProductFromCart...");
+      
+      // ✅ THIS WILL TRIGGER METAMASK POPUP
+      const result = await ecommerceService.removeProductFromCart(productId);
+      
+      console.log("⏳ Waiting for transaction confirmation...");
+      
+      // Wait for transaction to be mined
+      if (result && result.tx) {
+        await result.tx.wait();
+        console.log("✅ Blockchain transaction confirmed!");
+      }
+
+      // Only update local state AFTER blockchain success
+      dispatch({ type: 'REMOVE_FROM_CART', payload: productId });
+      console.log("✅ Successfully removed from blockchain cart");
+      
+    } catch (error) {
+      console.error('❌ Error removing from blockchain cart:', error);
+      throw error;
+    }
   };
 
-  /**
-   * Clear entire cart
-   */
-  const clearCart = (): void => {
-    setCartItems([]);
-    toast.info('🧹 Cart cleared');
+  const updateQuantity = async (productId: string, quantity: number) => {
+    try {
+      console.log("✏️ Updating blockchain cart quantity:", productId, "→", quantity);
+      
+      if (quantity < 1) {
+        await removeFromCart(productId);
+        return;
+      }
+
+      // For blockchain, we need to remove and re-add with new quantity
+      await removeFromCart(productId);
+      await addToCart({
+        productId,
+        title: "", // These will be filled from existing item
+        price: "0", 
+        sellerId: "0",
+        quantity,
+        image: ""
+      });
+      
+      console.log("✅ Successfully updated blockchain cart quantity");
+      
+    } catch (error) {
+      console.error('❌ Error updating quantity:', error);
+      throw error;
+    }
   };
 
-  /**
-   * Check if product is already in cart
-   */
-  const isInCart = (productId: string): boolean => {
-    return cartItems.some(item => item.productId === productId);
+  const clearCart = async () => {
+    if (!account) {
+      throw new Error("Please connect your wallet first");
+    }
+
+    try {
+      console.log("🗑️ Clearing blockchain cart");
+      
+      // Get user ID for blockchain operations
+      const userId = await getUserIdFromAddress(account);
+      if (userId === BigInt(0)) {
+        throw new Error("User not registered on blockchain");
+      }
+
+      console.log("🔗 Calling blockchain: clearCart...");
+      
+      // ✅ THIS WILL TRIGGER METAMASK POPUP
+      const result = await ecommerceService.clearCart();
+      
+      console.log("⏳ Waiting for transaction confirmation...");
+      
+      // Wait for transaction to be mined
+      if (result && result.tx) {
+        await result.tx.wait();
+        console.log("✅ Blockchain transaction confirmed!");
+      }
+
+      // Only update local state AFTER blockchain success
+      dispatch({ type: 'CLEAR_CART' });
+      console.log("✅ Successfully cleared blockchain cart");
+      
+    } catch (error) {
+      console.error('❌ Error clearing blockchain cart:', error);
+      throw error;
+    }
   };
 
-  /**
-   * Get quantity of specific product in cart
-   */
-  const getItemQuantity = (productId: string): number => {
-    const item = cartItems.find(item => item.productId === productId);
-    return item ? item.quantity : 0;
-  };
-
-  /**
-   * Calculate total price of all items in cart
-   */
-  const cartTotal = cartItems.reduce((total, item) => {
-    return total + (parseFloat(item.price) * item.quantity);
-  }, 0);
-
-  /**
-   * Calculate total number of items in cart
-   */
-  const itemCount = cartItems.reduce((count, item) => count + item.quantity, 0);
-
-  const value: CartContextType = {
-    // State
-    cartItems,
-    isLoading,
-    
-    // Actions
-    addToCart,
-    removeFromCart,
-    updateQuantity,
-    clearCart,
-    
-    // Computed values
-    cartTotal,
-    itemCount,
-    getItemQuantity,
-    isInCart
+  const refreshCart = async () => {
+    console.log("🔄 Refresh cart - Not implemented for blockchain");
+    // For now, we'll keep cart state local
   };
 
   return (
-    <CartContext.Provider value={value}>
+    <CartContext.Provider
+      value={{
+        cartItems: state.cartItems,
+        cartTotal: state.cartTotal,
+        isLoading: state.isLoading,
+        addToCart,
+        removeFromCart,
+        updateQuantity,
+        clearCart,
+        refreshCart
+      }}
+    >
       {children}
     </CartContext.Provider>
   );
 };
 
-/**
- * Custom hook to use cart context
- */
-export const useCart = (): CartContextType => {
+// Custom hook
+export const useCart = () => {
   const context = useContext(CartContext);
-  
   if (context === undefined) {
     throw new Error('useCart must be used within a CartProvider');
   }
-  
   return context;
 };

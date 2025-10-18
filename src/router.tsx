@@ -7,6 +7,7 @@ import AddProduct from "./page/product/addProduct";
 import Order from "./page/order";
 import Cart from "./page/cart";
 import CheckoutPage from "./page/checkout";
+import OrderConfirmation from './page/checkout/OrderConfirmation';
 import Register from "./page/register/Register";
 import DebugViewProduct from "./page/product/DebugViewProduct";
 import VerifySeller from "./page/register/VerifySeller";
@@ -24,6 +25,7 @@ const routes = createBrowserRouter([
       { path: "/debug-view", element: <DebugViewProduct /> },
       { path: "/cart", element: <Cart /> },
       {path: "/checkout", element: <CheckoutPage /> },
+      {path: "/order-confirmation", element: <OrderConfirmation /> },
       { path: "/order", element: <Order /> },
 
       // ---------------- Seller Flow ----------------

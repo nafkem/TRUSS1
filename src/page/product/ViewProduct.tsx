@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { ecommerceService } from "../../contracts/ecommerce/ecommerceService";
 import { useCart } from "../../context/CartContext";
 import { productService } from "../../contracts/product/productService";
 import { useWallet } from "../../context/walletContext";
@@ -24,15 +23,54 @@ type CombinedProduct = {
   createdAt?: string;
 };
 
-export default function ViewProduct() { // ✅ Remove async from component
+export default function ViewProduct() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { account } = useWallet();
-  const { addToCart } = useCart(); // ✅ Single declaration
+  const { addToCart } = useCart();
   
   const [product, setProduct] = useState<CombinedProduct | null>(null);
   const [loading, setLoading] = useState(true);
   const [addingToCart, setAddingToCart] = useState(false);
+
+  const getWarrantyText = (warrantySeconds: string) => {
+    try {
+      const seconds = Number(warrantySeconds);
+      if (isNaN(seconds) || seconds === 0) return "No warranty";
+      
+      const days = seconds / (24 * 60 * 60);
+      if (days >= 365) {
+        const years = days / 365;
+        return `${Math.round(years)} year${years > 1 ? 's' : ''} warranty`;
+      } else if (days >= 30) {
+        const months = days / 30;
+        return `${Math.round(months)} month${months > 1 ? 's' : ''} warranty`;
+      } else if (days >= 1) {
+        return `${Math.round(days)} day${days > 1 ? 's' : ''} warranty`;
+      } else {
+        return "No warranty";
+      }
+    } catch {
+      return "No warranty";
+    }
+  };
+
+  const getDeliveryDate = (timestamp: string) => {
+    try {
+      const seconds = Number(timestamp);
+      if (isNaN(seconds) || seconds === 0) return "Delivery time not specified";
+      
+      const date = new Date(seconds * 1000);
+      return date.toLocaleDateString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    } catch {
+      return "Invalid date";
+    }
+  };
 
   useEffect(() => {
     if (id) {
@@ -163,116 +201,46 @@ export default function ViewProduct() { // ✅ Remove async from component
       setLoading(false);
     }
   };
-const handleAddToCart = async () => {
-  if (!account) {
-    toast.error("⚠️ Please connect your wallet first");
-    return;
-  }
 
-  if (!product) return;
+  const handleAddToCart = async () => {
+    if (!account) {
+      toast.error("⚠️ Please connect your wallet first");
+      return;
+    }
 
-  try {
-    setAddingToCart(true);
-    
-    // Check if product has real blockchain data
-    const hasRealBlockchainData = product.unitPrice !== undefined && 
-                                 product.unitPrice > BigInt(0) && 
-                                 product.productId !== "0";
+    if (!product) return;
 
-    if (hasRealBlockchainData) {
-      toast.info("🛒 Adding to blockchain cart...");
-      const result = await ecommerceService.addProductToCart(product.productId, 1);
-      if (result && result.tx) {
-        toast.info("⏳ Waiting for transaction confirmation...");
-        await result.tx.wait();
-        toast.success("✅ Transaction confirmed!");
+    try {
+      setAddingToCart(true);
+      
+      // Format image URL
+      let imageUrl = product.image;
+      if (imageUrl && !imageUrl.startsWith('http')) {
+        imageUrl = `http://localhost:3001${product.image}`;
       }
-    } else {
-      toast.info("🛒 Adding to local cart...");
-    }
 
-    // ✅ FIX: Ensure image URL is properly formatted before saving to cart
-    let imageUrl = product.image;
-    if (imageUrl && !imageUrl.startsWith('http')) {
-      imageUrl = `http://localhost:3001${product.image}`;
-    }
-
-    // Add to local cart context for UI
-    await addToCart({
-      productId: product.productId,
-      title: product.title,
-      price: product.price,
-      image: imageUrl, // ✅ Now this will be a full URL
-      sellerId: product.sellerId
-    });
-
-
-    toast.success(`✅ ${product.title} added to cart!`);
-
-  } catch (err: any) {
-    console.error("❌ Error adding to cart:", err);
-    
-    if (err.code === "ACTION_REJECTED" || err.message?.includes("rejected")) {
-      toast.error("❌ Transaction rejected by user");
-    } else if (err.reason) {
-      toast.error(`❌ Blockchain error: ${err.reason}`);
-    } else if (err.message?.includes("insufficient funds")) {
-      toast.error("❌ Insufficient funds for transaction");
-    } else if (err.message?.includes("No transaction")) {
-      toast.error("❌ Blockchain service unavailable");
-      // Fallback to local cart even if blockchain fails
+      // Add to LOCAL cart
       await addToCart({
         productId: product.productId,
         title: product.title,
         price: product.price,
-        image: product.image,
-        sellerId: product.sellerId
+        image: imageUrl,
+        sellerId: product.sellerId,
+        quantity: 1
       });
-      toast.success(`✅ ${product.title} added to local cart (blockchain unavailable)!`);
-    } else {
-      // Generic error - still add to local cart
-      await addToCart({
-        productId: product.productId,
-        title: product.title,
-        price: product.price,
-        image: product.image,
-        sellerId: product.sellerId
-      });
-      toast.success(`✅ ${product.title} added to local cart!`);
-    }
-  } finally {
-    setAddingToCart(false);
-  }
-};
-  const getWarrantyText = (warrantySeconds: string) => {
-    try {
-      const seconds = Number(warrantySeconds);
-      if (isNaN(seconds)) return "No warranty";
-      
-      const days = seconds / (24 * 60 * 60);
-      if (days > 0) {
-        return `${Math.round(days)} day${days > 1 ? 's' : ''} warranty`;
-      }
-      return "No warranty";
-    } catch {
-      return "No warranty";
-    }
-  };
 
-  const getDeliveryDate = (timestamp: string) => {
-    try {
-      const seconds = Number(timestamp);
-      if (isNaN(seconds) || seconds === 0) return "Delivery time not specified";
+      toast.success(`✅ ${product.title} added to cart!`);
       
-      const date = new Date(seconds * 1000);
-      return date.toLocaleDateString('en-US', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      });
-    } catch {
-      return "Invalid date";
+      // ✅ AUTO-NAVIGATE TO CART PAGE AFTER SUCCESS
+      setTimeout(() => {
+        navigate('/cart');
+      }, 1000);
+
+    } catch (err: any) {
+      console.error("❌ Error adding to cart:", err);
+      toast.error("Failed to add to cart");
+    } finally {
+      setAddingToCart(false);
     }
   };
 

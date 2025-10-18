@@ -1,30 +1,34 @@
-// src/contracts/product/contract.ts
-import { Contract, BrowserProvider } from "ethers";
-import productAbi from "./ecomAbi.json";
-import { ECOMMERCE_CONTRACT_ADDRESS } from "./constant"; // Import from constant
+import { Contract, BrowserProvider, id } from "ethers";
+import ecomAbi from "./ecomAbi.json";
+import { ECOMMERCE_CONTRACT_ADDRESS } from "./constant";
+
+function ensureProvider(): BrowserProvider {
+  if (typeof window === "undefined" || !window.ethereum)
+    throw new Error("No Ethereum provider found");
+  return new BrowserProvider(window.ethereum);
+}
 
 export async function getEcommerceContract(): Promise<Contract> {
-  if (!window.ethereum) throw new Error("No Ethereum provider found");
-  
-  const provider = new BrowserProvider(window.ethereum);
+  const provider = ensureProvider();
   const signer = await provider.getSigner();
-  return new Contract(ECOMMERCE_CONTRACT_ADDRESS, productAbi, signer);
+  const contract = new Contract(ECOMMERCE_CONTRACT_ADDRESS, ecomAbi, signer);
+
+  // ✅ Correct way to compute the sighash in ethers v6
+  const sighash = id("checkOutWithNative(string)").slice(0, 10);
+  console.log("Function selector for checkOutWithNative(string):", sighash);
+
+  return contract;
 }
 
 export function getEcommerceContractReadOnly(): Contract {
-  if (!window.ethereum) throw new Error("No Ethereum provider found");
-  
-  const provider = new BrowserProvider(window.ethereum);
-  return new Contract(ECOMMERCE_CONTRACT_ADDRESS, productAbi, provider);
+  const provider = ensureProvider();
+  return new Contract(ECOMMERCE_CONTRACT_ADDRESS, ecomAbi, provider);
 }
 
 export async function getCurrentAccountAddress(): Promise<string> {
-  if (!window.ethereum) throw new Error("No Ethereum provider found");
-  
-  const provider = new BrowserProvider(window.ethereum);
+  const provider = ensureProvider();
   const signer = await provider.getSigner();
-  return await signer.getAddress();
+  return signer.getAddress();
 }
 
-// Export the contract address if needed elsewhere
 export { ECOMMERCE_CONTRACT_ADDRESS };

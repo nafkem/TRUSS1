@@ -4,21 +4,31 @@ import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 
 export default function CartPage() {
-  const { cartItems, removeFromCart, updateQuantity, clearCart, cartTotal} = useCart();
-  const { account } = useWallet();
+  const { cartItems, removeFromCart, updateQuantity, clearCart, cartTotal, isLoading, refreshCart } = useCart();
+  const { account, isConnected } = useWallet();
   const navigate = useNavigate();
 
-  const handleRemoveItem = (productId: string) => {
-    removeFromCart(productId);
-    toast.success('Item removed from cart');
+  const handleRemoveItem = async (productId: string) => {
+    try {
+      await removeFromCart(productId);
+      toast.success('Item removed from cart');
+    } catch (error) {
+      toast.error('Failed to remove item from cart');
+    }
   };
 
-  const handleUpdateQuantity = (productId: string, newQuantity: number) => {
+  const handleUpdateQuantity = async (productId: string, newQuantity: number) => {
     if (newQuantity < 1) {
-      handleRemoveItem(productId);
+      await handleRemoveItem(productId);
       return;
     }
-    updateQuantity(productId, newQuantity);
+    
+    try {
+      await updateQuantity(productId, newQuantity);
+      toast.success('Quantity updated');
+    } catch (error) {
+      toast.error('Failed to update quantity');
+    }
   };
 
   const handleCheckout = () => {
@@ -26,18 +36,47 @@ export default function CartPage() {
       toast.error('Please connect your wallet first');
       return;
     }
-    // Add your checkout logic here
-    toast.info('Proceeding to checkout...');
-     navigate('/checkout'); // Uncomment if you have a checkout page
+    
+    if (cartItems.length === 0) {
+      toast.error('Your cart is empty');
+      return;
+    }
+    
+    navigate('/checkout');
   };
 
-  
+  const handleClearCart = async () => {
+    try {
+      await clearCart();
+      toast.success('Cart cleared');
+    } catch (error) {
+      toast.error('Failed to clear cart');
+    }
+  };
+
   const handleContinueShopping = () => {
     navigate('/products');
   };
 
-  // ✅ Use the pre-calculated cartTotal instead of recalculating
-  // const totalPrice = cartTotal; // You can use cartTotal directly
+  const handleRefreshCart = async () => {
+    try {
+      await refreshCart();
+      toast.success('Cart refreshed');
+    } catch (error) {
+      toast.error('Failed to refresh cart');
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="max-w-4xl mx-auto p-6">
+        <div className="text-center py-12">
+          <div className="text-2xl font-bold text-gray-800 mb-4">Loading Cart...</div>
+          <p className="text-gray-600">Fetching your cart items from blockchain</p>
+        </div>
+      </div>
+    );
+  }
 
   if (cartItems.length === 0) {
     return (
@@ -46,12 +85,22 @@ export default function CartPage() {
           <div className="text-6xl mb-4">🛒</div>
           <h2 className="text-2xl font-bold text-gray-800 mb-4">Your Cart is Empty</h2>
           <p className="text-gray-600 mb-6">Add some products to get started!</p>
-          <button
-            onClick={handleContinueShopping}
-            className="bg-neutral-800 text-white px-6 py-3 rounded-lg hover:bg-neutral-700"
-          >
-            Browse Products
-          </button>
+          <div className="space-x-4">
+            <button
+              onClick={handleContinueShopping}
+              className="bg-neutral-800 text-white px-6 py-3 rounded-lg hover:bg-neutral-700"
+            >
+              Browse Products
+            </button>
+            {isConnected && (
+              <button
+                onClick={handleRefreshCart}
+                className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700"
+              >
+                Refresh Cart
+              </button>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -69,7 +118,13 @@ export default function CartPage() {
             Continue Shopping
           </button>
           <button
-            onClick={clearCart}
+            onClick={handleRefreshCart}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+          >
+            Refresh Cart
+          </button>
+          <button
+            onClick={handleClearCart}
             className="text-red-600 hover:text-red-800 font-medium border border-red-600 px-4 py-2 rounded-lg hover:bg-red-50"
           >
             Clear Cart
@@ -79,17 +134,17 @@ export default function CartPage() {
 
       <div className="bg-white rounded-lg shadow-lg border mb-6">
         {cartItems.map((item) => (
-  <div key={item.productId} className="flex items-center p-6 border-b last:border-b-0">
-    {item.image && (
-      <img
-        src={item.image.startsWith('http') ? item.image : `http://localhost:3001${item.image}`}
-        alt={item.title}
-        className="w-20 h-20 object-cover rounded-lg mr-4"
-        onError={(e) => {
-          e.currentTarget.style.display = 'none';
-        }}
-      />
-    )}
+          <div key={item.productId} className="flex items-center p-6 border-b last:border-b-0">
+            {item.image && (
+              <img
+                src={item.image.startsWith('http') ? item.image : `http://localhost:3001${item.image}`}
+                alt={item.title}
+                className="w-20 h-20 object-cover rounded-lg mr-4"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                }}
+              />
+            )}
  
             <div className="flex-1">
               <h3 className="text-lg font-semibold text-gray-900 mb-1">{item.title}</h3>
@@ -101,6 +156,7 @@ export default function CartPage() {
               <button
                 onClick={() => handleUpdateQuantity(item.productId, item.quantity - 1)}
                 className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center hover:bg-gray-300 transition-colors"
+                disabled={isLoading}
               >
                 -
               </button>
@@ -108,6 +164,7 @@ export default function CartPage() {
               <button
                 onClick={() => handleUpdateQuantity(item.productId, item.quantity + 1)}
                 className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center hover:bg-gray-300 transition-colors"
+                disabled={isLoading}
               >
                 +
               </button>
@@ -120,6 +177,7 @@ export default function CartPage() {
               <button
                 onClick={() => handleRemoveItem(item.productId)}
                 className="text-red-500 hover:text-red-700 text-sm mt-1"
+                disabled={isLoading}
               >
                 Remove
               </button>
@@ -137,10 +195,10 @@ export default function CartPage() {
         <div className="space-y-3">
           <button
             onClick={handleCheckout}
-            disabled={!account}
+            disabled={!account || isLoading}
             className="w-full bg-green-600 text-white py-4 px-6 rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-bold text-lg transition-colors"
           >
-            {!account ? 'Connect Wallet to Checkout' : 'Proceed to Checkout'}
+            {!account ? 'Connect Wallet to Checkout' : isLoading ? 'Processing...' : 'Proceed to Checkout'}
           </button>
           
           {!account && (
