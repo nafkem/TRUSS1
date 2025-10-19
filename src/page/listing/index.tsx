@@ -2,14 +2,13 @@ import { useEffect, useState } from "react";
 import { productService } from "../../contracts/product/productService";
 import { toast } from "sonner";
 
-// TS type matching contract Product struct
 interface Product {
   productId: number;
   sellerId: number;
-  unitPrice: number;           // USD * 1e8 (or contract decimal)
-  waranteeDuration: number;    // in seconds
+  unitPrice: number;
+  waranteeDuration: number;
   title: string;
-  whenToExpectDelivery: number; // block timestamp + offset
+  whenToExpectDelivery: number;
 }
 
 const Listing = () => {
@@ -19,8 +18,17 @@ const Listing = () => {
   const fetchProducts = async () => {
     try {
       setLoading(true);
-      // fetch all products (adjust start/end as needed)
-      const productList: Product[] = await productService.getProducts(0, 100);
+      const rawProducts = await productService.getProducts(0, 100);
+
+      const productList: Product[] = rawProducts.map((p: any) => ({
+        productId: Number(p.productId),
+        sellerId: Number(p.sellerId),
+        title: p.title,
+        unitPrice: Number(p.unitPrice),
+        waranteeDuration: Number(p.waranteeDuration),
+        whenToExpectDelivery: Number(p.whenToExpectDelivery),
+      }));
+
       setProducts(productList);
     } catch (err: any) {
       console.error("Failed to fetch products:", err);
@@ -34,15 +42,8 @@ const Listing = () => {
     fetchProducts();
   }, []);
 
-  const formatPrice = (price: number) => {
-    // convert contract price back to USD (depends on decimals used in contract)
-    return (price / 1e8).toFixed(2);
-  };
-
-  const formatDelivery = (timestamp: number) => {
-    const date = new Date(timestamp * 1000);
-    return date.toLocaleString();
-  };
+  const formatPrice = (price: number) => (price / 1e8).toFixed(2);
+  const formatDelivery = (timestamp: number) => new Date(timestamp * 1000).toLocaleString();
 
   return (
     <div className="max-w-6xl mx-auto p-6">
@@ -58,9 +59,7 @@ const Listing = () => {
             <div key={product.productId} className="border p-4 rounded-lg shadow-lg">
               <h2 className="text-xl font-semibold mb-2">{product.title}</h2>
               <p>Price: ${formatPrice(product.unitPrice)}</p>
-              <p>
-                Delivery: {formatDelivery(product.whenToExpectDelivery)}
-              </p>
+              <p>Delivery: {formatDelivery(product.whenToExpectDelivery)}</p>
               <p>
                 Warranty:{" "}
                 {product.waranteeDuration > 0

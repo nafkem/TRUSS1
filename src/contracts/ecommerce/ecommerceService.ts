@@ -81,15 +81,21 @@ export const ecommerceService = {
     return { tx, receipt };
   },
 
-  /** Checkout with native ETH */
-  async checkOutWithNative(payToken: string, value: string) {
-    const contract = await getEcommerceContract();
-    const tx = await contract.checkOutWithNative(payToken, {
-      value: ethers.parseEther(value),
-    });
-    const receipt = await tx.wait();
-    return { tx, receipt };
-  },
+ /** Checkout with native ETH */
+async checkOutWithNative(
+  payToken: string, 
+  txOptions?: { value: bigint }
+) {
+  const contract = await getEcommerceContract();
+
+  const tx = await contract.checkOutWithNative(payToken, {
+    value: txOptions?.value, // use the value passed from the caller
+  });
+
+  const receipt = await tx.wait();
+  return { tx, receipt };
+},
+
 
   /** Checkout with USD token */
   async checkOutWithUSD(payToken: string) {

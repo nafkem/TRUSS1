@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { useCart } from '../../context/CartContext';
 import { useWallet } from '../../context/walletContext';
 import { toast } from 'sonner';
-//import { ethers } from 'ethers';
+import { ethers } from 'ethers';
 import { useNavigate } from 'react-router-dom';
 //import { getEcommerceContract } from "../../contracts";
 import { ecommerceService } from '../../contracts/ecommerce/ecommerceService';
@@ -82,37 +82,37 @@ export default function CheckoutPage() {
   };
 
   // ETH payment handler — uses ecommerceService.checkOutWithNative(payToken: string, value: string)
-  const handleEthPayment = async () => {
-    try {
-      const isEthAccepted = await escrowService.isAccepted("ETH");
-      if (!isEthAccepted) throw new Error("ETH is not accepted for payments");
+ const handleEthPayment = async () => {
+  try {
+    const isEthAccepted = await escrowService.isAccepted("ETH");
+    if (!isEthAccepted) throw new Error("ETH is not accepted for payments");
 
-      const usdValue = Number(cartTotal);
-      if (!usdValue || usdValue <= 0) throw new Error("Invalid cart total");
+    const usdValue = Number(cartTotal);
+    if (!usdValue || usdValue <= 0) throw new Error("Invalid cart total");
 
-      // Temporary conversion — replace with on-chain oracle or API for production
-      const ethRate = 3000; // 1 ETH = $3000
-      const cartTotalInEth = usdValue / ethRate;
+    const ethRate = 3000; // 1 ETH = $3000
+    const cartTotalInEth = usdValue / ethRate;
 
-      console.log(`💸 Paying $${usdValue} (~${cartTotalInEth} ETH)`);
+    console.log(`💸 Paying $${usdValue} (~${cartTotalInEth} ETH)`);
 
-      // Call service using the original service signature (value as string)
-      const result: any = await ecommerceService.checkOutWithNative("ETH", cartTotalInEth.toString());
+    // ✅ Correct way to call
+    const result: any = await ecommerceService.checkOutWithNative("ETH", {
+      value: ethers.parseEther(cartTotalInEth.toString())
+    });
 
-      // result expected to be { tx, receipt } per your existing service
-      if (result?.tx && typeof result.tx.wait === "function") {
-        toast.info('⏳ Waiting for blockchain confirmation...');
-        await result.tx.wait();
-        console.log("✅ ETH payment confirmed on blockchain!");
-      } else {
-        console.warn("Unexpected checkout response:", result);
-        throw new Error("Unexpected checkout response");
-      }
-    } catch (error) {
-      console.error("ETH payment failed:", error);
-      throw error;
+    if (result?.tx && typeof result.tx.wait === "function") {
+      toast.info('⏳ Waiting for blockchain confirmation...');
+      await result.tx.wait();
+      console.log("✅ ETH payment confirmed on blockchain!");
+    } else {
+      console.warn("Unexpected checkout response:", result);
+      throw new Error("Unexpected checkout response");
     }
-  };
+  } catch (error) {
+    console.error("ETH payment failed:", error);
+    throw error;
+  }
+};
 
   const handleStablecoinPayment = async () => {
     try {
