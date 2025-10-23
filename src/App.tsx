@@ -1,21 +1,22 @@
+// App.js - FIXED VERSION
 import { RouterProvider } from "react-router-dom";
 import routes from "./router";
 import { UserProvider } from "./context/userContext";
 import { CartProvider } from "./context/CartContext";
-import { WalletProvider } from "./context/walletContext"; // ADD THIS IMPORT
+import { WalletProvider } from "./context/walletContext";
 import { Toaster } from "sonner";
 
 function App() {
   return (
     <UserProvider>
-      <WalletProvider> {/* ADD THIS WRAPPER */}
+      <WalletProvider>
         <CartProvider>
-        <Toaster richColors position="top-center" />
-        <RouterProvider router={routes} />
-      </CartProvider>
-      </WalletProvider > {/* ADD THIS WRAPPER */}
+          <Toaster richColors position="top-center" />
+          <RouterProvider router={routes} />
+        </CartProvider>
+      </WalletProvider>
     </UserProvider>
-      );
+  );
 }
 
 export default App;

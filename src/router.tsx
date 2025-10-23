@@ -4,7 +4,7 @@ import Homepage from "./page/home/Homepage";
 import Product from "./page/product/ViewProduct";   // ✅ single product view
 import ProductList from "./page/product/ProductList"; // ✅ all products
 import AddProduct from "./page/product/addProduct";
-import Order from "./page/order";
+//import Order from "./page/order";
 import Cart from "./page/cart";
 import CheckoutPage from "./page/checkout";
 import OrderConfirmation from './page/checkout/OrderConfirmation';
@@ -26,7 +26,7 @@ const routes = createBrowserRouter([
       { path: "/cart", element: <Cart /> },
       {path: "/checkout", element: <CheckoutPage /> },
       {path: "/order-confirmation", element: <OrderConfirmation /> },
-      { path: "/order", element: <Order /> },
+      //{ path: "/order", element: <Order /> },
 
       // ---------------- Seller Flow ----------------
       {

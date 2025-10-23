@@ -1,15 +1,24 @@
-export const headerNav = [
-  {
-    title: "My listing",
-    link: "/listing",
+export const headerNav = [{
+    title: "All Products",
+    link: "/products"
   },
   {
-    title: "My order",
-    link: "/order",
+    title: "Add Product", 
+    link: "/addProduct"
   },
-  {title:"Sell Product",
-    link:"/add-listing"
+  {
+    title: "View Product",
+    link: "/viewProduct"
+  },
+  {
+    title: "Cart",
+    link: "/cart"
+  },
+  {
+    title: "Checkout",
+    link: "/checkout"
   }
+  // Add more as needed
 ];
 
 export const footerLinks = [
