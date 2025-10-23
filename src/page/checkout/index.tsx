@@ -81,8 +81,7 @@ export default function CheckoutPage() {
     }
   };
 
-  // ETH payment handler — uses ecommerceService.checkOutWithNative(payToken: string, value: string)
- const handleEthPayment = async () => {
+  const handleEthPayment = async () => {
   try {
     const isEthAccepted = await escrowService.isAccepted("ETH");
     if (!isEthAccepted) throw new Error("ETH is not accepted for payments");
@@ -95,21 +94,24 @@ export default function CheckoutPage() {
 
     console.log(`💸 Paying $${usdValue} (~${cartTotalInEth} ETH)`);
 
-    // ✅ Correct way to call
-    const result: any = await ecommerceService.checkOutWithNative("ETH", {
-      value: ethers.parseEther(cartTotalInEth.toString())
+    const txValue = ethers.parseEther(cartTotalInEth.toString()); // bigint
+
+    // Call service with correct token string
+    const result = await ecommerceService.checkOutWithNative("ETH", {
+      value: txValue,
     });
 
     if (result?.tx && typeof result.tx.wait === "function") {
-      toast.info('⏳ Waiting for blockchain confirmation...');
+      toast.info("⏳ Waiting for blockchain confirmation...");
       await result.tx.wait();
       console.log("✅ ETH payment confirmed on blockchain!");
     } else {
       console.warn("Unexpected checkout response:", result);
       throw new Error("Unexpected checkout response");
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error("ETH payment failed:", error);
+    toast.error(`❌ ETH payment failed: ${error.message || error}`);
     throw error;
   }
 };

@@ -5,6 +5,7 @@ import {
   getCurrentAccountAddress,
 } from "./contract";
 
+
 export interface CartItem {
   sellerId: string;
   productId: string;
@@ -36,7 +37,7 @@ export const ecommerceService = {
 
   async removeProductFromCart(productId: BigNumberish) {
     try {
-      const contract = await getEcommerceContract();
+      const contract = await getEcommerceContract() as any;
       const tx = await contract.removeProductFromCart(productId);
       const receipt = await tx.wait();
       return { tx, receipt };
@@ -48,7 +49,7 @@ export const ecommerceService = {
 
   async clearCart() {
     try {
-      const contract = await getEcommerceContract();
+      const contract = await getEcommerceContract() as any;
       const tx = await contract.clearCart();
       const receipt = await tx.wait();
       return { tx, receipt };
@@ -75,31 +76,44 @@ export const ecommerceService = {
 
   /** Add product to cart */
   async addProductToCart(productId: BigNumberish, qty: BigNumberish) {
-    const contract = await getEcommerceContract();
+    const contract = await getEcommerceContract() as any;
     const tx = await contract.addProductToCart(productId, qty);
     const receipt = await tx.wait();
     return { tx, receipt };
   },
 
- /** Checkout with native ETH */
-async checkOutWithNative(
-  payToken: string, 
-  txOptions?: { value: bigint }
-) {
-  const contract = await getEcommerceContract();
+  /** Checkout with native ETH */
+  async checkOutWithNative(
+    _payToken: string,
+    txOptions: { value: bigint }
+  ) {
+    if (!txOptions?.value || txOptions.value <= 0n) {
+      throw new Error("ETH value must be provided and greater than 0");
+    }
 
-  const tx = await contract.checkOutWithNative(payToken, {
-    value: txOptions?.value, // use the value passed from the caller
-  });
+    const contract = await getEcommerceContract() as any;
 
-  const receipt = await tx.wait();
-  return { tx, receipt };
-},
+    // Optional: simulate first to catch revert reason
+    try {
+      await contract.callStatic.checkOutWithNative(_payToken, {
+        value: txOptions.value,
+      });
+    } catch (err: any) {
+      console.error("Call simulation failed:", err);
+      throw new Error(err.reason || "Contract would revert");
+    }
 
+    // Send actual transaction
+    const tx = await contract.checkOutWithNative(_payToken, {
+      value: txOptions.value,
+    });
+    const receipt = await tx.wait();
+    return { tx, receipt };
+  },
 
   /** Checkout with USD token */
   async checkOutWithUSD(payToken: string) {
-    const contract = await getEcommerceContract();
+    const contract = await getEcommerceContract() as any;
     const tx = await contract.checkOutWithUSD(payToken);
     const receipt = await tx.wait();
     return { tx, receipt };
@@ -111,7 +125,7 @@ async checkOutWithNative(
     productContract: string,
     initialOwner: string
   ) {
-    const contract = await getEcommerceContract();
+    const contract = await getEcommerceContract() as any;
     const tx = await contract.initialize(
       escrowAddress,
       userContract,
@@ -123,21 +137,21 @@ async checkOutWithNative(
   },
 
   async renounceOwnership() {
-    const contract = await getEcommerceContract();
+    const contract = await getEcommerceContract() as any;
     const tx = await contract.renounceOwnership();
     const receipt = await tx.wait();
     return { tx, receipt };
   },
 
   async transferOwnership(newOwner: string) {
-    const contract = await getEcommerceContract();
+    const contract = await getEcommerceContract() as any;
     const tx = await contract.transferOwnership(newOwner);
     const receipt = await tx.wait();
     return { tx, receipt };
   },
 
   async upgradeToAndCall(newImplementation: string, data: string) {
-    const contract = await getEcommerceContract();
+    const contract = await getEcommerceContract() as any;
     const tx = await contract.upgradeToAndCall(newImplementation, data);
     const receipt = await tx.wait();
     return { tx, receipt };
@@ -145,7 +159,7 @@ async checkOutWithNative(
 
   /** Event queries */
   async getEvents(eventName: string, fromBlock?: number) {
-    const contract = await getEcommerceContract();
+    const contract = await getEcommerceContract() as any;
     const filter = (contract.filters as any)[eventName]();
     return contract.queryFilter(filter, fromBlock);
   },

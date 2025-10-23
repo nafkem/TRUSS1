@@ -1,6 +1,8 @@
-import { Contract, BrowserProvider, id } from "ethers";
-import ecomAbi from "./ecomAbi.json";
+import { Contract, BrowserProvider, type JsonFragment } from "ethers";
+import ecomAbiJson from "./ecomAbi.json";
 import { ECOMMERCE_CONTRACT_ADDRESS } from "./constant";
+
+const ecomAbi = ecomAbiJson as JsonFragment[];
 
 function ensureProvider(): BrowserProvider {
   if (typeof window === "undefined" || !window.ethereum)
@@ -13,9 +15,15 @@ export async function getEcommerceContract(): Promise<Contract> {
   const signer = await provider.getSigner();
   const contract = new Contract(ECOMMERCE_CONTRACT_ADDRESS, ecomAbi, signer);
 
-  // ✅ Correct way to compute the sighash in ethers v6
-  const sighash = id("checkOutWithNative(string)").slice(0, 10);
-  console.log("Function selector for checkOutWithNative(string):", sighash);
+  console.log("Contract methods:", Object.keys(contract));
+  console.log("Contract address:", contract.target);
+
+  // runtime sanity check
+  if (typeof contract.checkOutWithNative !== "function") {
+    throw new Error(
+      "checkOutWithNative is not found on the contract. Check ABI & address"
+    );
+  }
 
   return contract;
 }
@@ -30,5 +38,3 @@ export async function getCurrentAccountAddress(): Promise<string> {
   const signer = await provider.getSigner();
   return signer.getAddress();
 }
-
-export { ECOMMERCE_CONTRACT_ADDRESS };
