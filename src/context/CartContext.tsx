@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, ReactNode } from 'react';
+import React, { createContext, useContext, useReducer, ReactNode, useEffect } from 'react';
 import { ecommerceService } from '../contracts/ecommerce/ecommerceService';
 import { useWallet } from '../context/walletContext';
 import { userService } from '../contracts/user/userService';
@@ -38,13 +38,39 @@ type CartAction =
   | { type: 'SET_CART'; payload: CartItem[] }
   | { type: 'SET_LOADING'; payload: boolean };
 
-// Cart reducer implementation
+// localStorage keys
+const CART_STORAGE_KEY = 'ecommerce_cart';
+
+// Helper functions for localStorage
+const saveCartToStorage = (cartItems: CartItem[]) => {
+  try {
+    localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cartItems));
+  } catch (error) {
+    console.error('❌ Error saving cart to localStorage:', error);
+  }
+};
+
+const loadCartFromStorage = (): CartItem[] => {
+  try {
+    const storedCart = localStorage.getItem(CART_STORAGE_KEY);
+    if (storedCart) {
+      return JSON.parse(storedCart);
+    }
+  } catch (error) {
+    console.error('❌ Error loading cart from localStorage:', error);
+  }
+  return [];
+};
+
+// Cart reducer implementation (updated to sync with localStorage)
 const cartReducer = (state: CartState, action: CartAction): CartState => {
+  let newState: CartState;
+
   switch (action.type) {
     case 'ADD_TO_CART': {
       const existingItem = state.cartItems.find(item => item.productId === action.payload.productId);
       if (existingItem) {
-        return {
+        newState = {
           ...state,
           cartItems: state.cartItems.map(item =>
             item.productId === action.payload.productId
@@ -53,12 +79,14 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
           ),
           cartTotal: state.cartTotal + (parseFloat(action.payload.price) * action.payload.quantity)
         };
+      } else {
+        newState = {
+          ...state,
+          cartItems: [...state.cartItems, action.payload],
+          cartTotal: state.cartTotal + (parseFloat(action.payload.price) * action.payload.quantity)
+        };
       }
-      return {
-        ...state,
-        cartItems: [...state.cartItems, action.payload],
-        cartTotal: state.cartTotal + (parseFloat(action.payload.price) * action.payload.quantity)
-      };
+      break;
     }
 
     case 'REMOVE_FROM_CART': {
@@ -67,11 +95,12 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
       
       const removeTotal = parseFloat(itemToRemove.price) * itemToRemove.quantity;
       
-      return {
+      newState = {
         ...state,
         cartItems: state.cartItems.filter(item => item.productId !== action.payload),
         cartTotal: state.cartTotal - removeTotal
       };
+      break;
     }
 
     case 'UPDATE_QUANTITY': {
@@ -81,7 +110,7 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
       const oldItemTotal = parseFloat(itemToUpdate.price) * itemToUpdate.quantity;
       const newItemTotal = parseFloat(itemToUpdate.price) * action.payload.quantity;
 
-      return {
+      newState = {
         ...state,
         cartItems: state.cartItems.map(item =>
           item.productId === action.payload.productId
@@ -90,43 +119,61 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
         ),
         cartTotal: state.cartTotal - oldItemTotal + newItemTotal
       };
+      break;
     }
 
     case 'CLEAR_CART':
-      return {
+      newState = {
         ...state,
         cartItems: [],
         cartTotal: 0
       };
+      break;
 
     case 'SET_CART': {
       const calculatedTotal = action.payload.reduce((total, item) => {
         return total + (parseFloat(item.price) * item.quantity);
       }, 0);
       
-      return {
+      newState = {
         ...state,
         cartItems: action.payload,
         cartTotal: calculatedTotal
       };
+      break;
     }
 
     case 'SET_LOADING':
-      return {
+      newState = {
         ...state,
         isLoading: action.payload
       };
+      break;
 
     default:
       return state;
   }
+
+  // Save to localStorage after every cart modification
+  if (action.type !== 'SET_LOADING') {
+    saveCartToStorage(newState.cartItems);
+  }
+
+  return newState;
 };
 
-// Initial state
-const initialState: CartState = {
-  cartItems: [],
-  cartTotal: 0,
-  isLoading: false
+// Initial state with localStorage loading
+const getInitialState = (): CartState => {
+  const cartItems = loadCartFromStorage();
+  const cartTotal = cartItems.reduce((total, item) => {
+    return total + (parseFloat(item.price) * item.quantity);
+  }, 0);
+
+  return {
+    cartItems,
+    cartTotal,
+    isLoading: false
+  };
 };
 
 interface CartProviderProps {
@@ -134,8 +181,16 @@ interface CartProviderProps {
 }
 
 export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
-  const [state, dispatch] = useReducer(cartReducer, initialState);
+  const [state, dispatch] = useReducer(cartReducer, getInitialState());
   const { account } = useWallet();
+
+  // Sync cart when account changes (optional)
+  useEffect(() => {
+    if (account) {
+      // You can add logic here to merge localStorage cart with blockchain cart if needed
+      console.log('🔄 Account changed, cart loaded from localStorage');
+    }
+  }, [account]);
 
   // Get REAL user ID from user contract
   const getUserIdFromAddress = async (address: string): Promise<bigint> => {
@@ -195,7 +250,7 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
 
       // Only update local state AFTER blockchain success
       dispatch({ type: 'ADD_TO_CART', payload: item });
-      console.log("✅ Successfully added to blockchain cart");
+      console.log("✅ Successfully added to blockchain cart and localStorage");
       
     } catch (error) {
       console.error('❌ Error adding to blockchain cart:', error);
@@ -232,7 +287,7 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
 
       // Only update local state AFTER blockchain success
       dispatch({ type: 'REMOVE_FROM_CART', payload: productId });
-      console.log("✅ Successfully removed from blockchain cart");
+      console.log("✅ Successfully removed from blockchain cart and localStorage");
       
     } catch (error) {
       console.error('❌ Error removing from blockchain cart:', error);
@@ -260,7 +315,7 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
         image: ""
       });
       
-      console.log("✅ Successfully updated blockchain cart quantity");
+      console.log("✅ Successfully updated blockchain cart quantity and localStorage");
       
     } catch (error) {
       console.error('❌ Error updating quantity:', error);
@@ -297,7 +352,7 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
 
       // Only update local state AFTER blockchain success
       dispatch({ type: 'CLEAR_CART' });
-      console.log("✅ Successfully cleared blockchain cart");
+      console.log("✅ Successfully cleared blockchain cart and localStorage");
       
     } catch (error) {
       console.error('❌ Error clearing blockchain cart:', error);
@@ -306,8 +361,9 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
   };
 
   const refreshCart = async () => {
-    console.log("🔄 Refresh cart - Not implemented for blockchain");
-    // For now, we'll keep cart state local
+    console.log("🔄 Refresh cart - Loading from localStorage");
+    const cartItems = loadCartFromStorage();
+    dispatch({ type: 'SET_CART', payload: cartItems });
   };
 
   return (
